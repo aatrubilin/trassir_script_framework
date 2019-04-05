@@ -49,7 +49,7 @@
  * в папке [examples](examples);
  * в [базе знаний](https://confluence.trassir.com/display/WD/Script+DSSL) DSSL;
  * в [документации](https://www.dssl.ru/files/trassir/manual/ru/setup-rules-examples.html) к ПО;
- * в [документации](https://trassir_script_framework.readthedocs.io/) к фреймворку.
+ * в [документации](https://trassir-script-framework.readthedocs.io) к фреймворку.
 
 ## Authors
 
