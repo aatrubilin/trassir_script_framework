@@ -12,7 +12,7 @@
 
 ### Installing
 
-Передите в настрйоки Trassir -> Автоматизация -> Новый скрипт
+Перейдите в настройки Trassir -> Автоматизация -> Новый скрипт
 
 Скопируйте в редактор содержимое файла 
 [trassir_script_framework.py](trassir_script_framework.py)
