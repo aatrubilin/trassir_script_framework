@@ -1,3 +1,5 @@
+[![Documentation Status](https://readthedocs.org/projects/trassir-script-framework/badge/?version=latest)](https://trassir-script-framework.readthedocs.io/ru/latest/?badge=latest)
+
 # trassir_script_framework
 
 Фреймворк для скриптов автоматизации [Trassir](https://www.dssl.ru/)
