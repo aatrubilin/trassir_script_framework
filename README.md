@@ -11,7 +11,7 @@
 
 Передите в настрйоки Trassir -> Автоматизация -> Новый скрипт
 
-Скопируйте в редакторв содержимое файла 
+Скопируйте в редактор содержимое файла 
 [trassir_script_framework.py](trassir_script_framework.py)
 
 Измените автора ``AATrubilin`` и имя скрипта ``trassir_script_framework`` и версию ``0.1b``
@@ -45,11 +45,12 @@
 >>> template.show(1)
 ```
 
-Больше примеров:
+Больше примеров и информации:
  * в папке [examples](examples);
+ * в [документации](https://trassir-script-framework.readthedocs.io) к фреймворку;
  * в [базе знаний](https://confluence.trassir.com/display/WD/Script+DSSL) DSSL;
- * в [документации](https://www.dssl.ru/files/trassir/manual/ru/setup-rules-examples.html) к ПО;
- * в [документации](https://trassir-script-framework.readthedocs.io) к фреймворку.
+ * в [документации](https://www.dssl.ru/files/trassir/manual/ru/setup-rules-examples.html) к ПО.
+ 
 
 ## Authors
 

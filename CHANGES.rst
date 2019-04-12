@@ -2,6 +2,60 @@
 Changelog
 =========
 
+Version 0.2b
+==============
+*Released 2019-04-12*
+
+New Features
+
+- Added :class:`trassir_script_framework.FTPSender`
+- Added :meth:`trassir_script_framework.BaseUtils.lpr_flags_decode`
+- Added more examples
+
+Changes
+
+- Transferring PokaYoke GET methods to independent classes
+  and extended functionality:
+
+    | `PokaYoke.get_servers` -> :class:`trassir_script_framework.Servers`
+    | `PokaYoke.get_persons` -> :class:`trassir_script_framework.Persons`
+    | `PokaYoke.get_person_folders` -> :class:`trassir_script_framework.Persons`
+    | `PokaYoke.get_users` -> :class:`trassir_script_framework.Users`
+    | `PokaYoke.get_terminals` -> :class:`trassir_script_framework.PosTerminals`
+    | `PokaYoke.get_ip_cameras` -> :class:`trassir_script_framework.Devices`
+    | `PokaYoke.get_channels` -> :class:`trassir_script_framework.Channels`
+    | `PokaYoke.get_networks` -> :class:`trassir_script_framework.NetworkNodes`
+    | `PokaYoke.get_rules` -> :class:`trassir_script_framework.Rules`
+    | `PokaYoke.get_scripts` -> :class:`trassir_script_framework.Scripts`
+    | `PokaYoke.get_schedules` -> :class:`trassir_script_framework.Schedules`
+    | `PokaYoke.get_servers` -> :class:`trassir_script_framework.EmailAccounts`
+    | `PokaYoke.get_template_loops` -> :class:`trassir_script_framework.TemplateLoops`
+    | `PokaYoke.get_gpio_inputs` -> :class:`trassir_script_framework.GPIO`
+    | `PokaYoke.get_gpio_outputs` -> :class:`trassir_script_framework.GPIO`
+    | `PokaYoke.get_people_zones` -> :class:`trassir_script_framework.Zones`
+    | `PokaYoke.get_simt_zones` -> :class:`trassir_script_framework.Zones`
+    | `PokaYoke.get_workplaces` -> :class:`trassir_script_framework.Zones`
+    | `PokaYoke.get_queues` -> :class:`trassir_script_framework.Zones`
+    | `PokaYoke.get_shelves` -> :class:`trassir_script_framework.Zones`
+    | `PokaYoke.get_people_zones` -> :class:`trassir_script_framework.Zones`
+    | `PokaYoke.get_head_borders` -> :class:`trassir_script_framework.Borders`
+    | `PokaYoke.get_people_borders` -> :class:`trassir_script_framework.Borders`
+    | `PokaYoke.get_simt_borders` -> :class:`trassir_script_framework.Borders`
+    | `PokaYoke.get_deep_people_borders` -> :class:`trassir_script_framework.Borders`
+    | `PokaYoke.get_all_borders` -> :class:`trassir_script_framework.Borders`
+    | `PokaYoke.get_access_points` -> :class:`trassir_script_framework.Sigur`
+
+
+- Rename some method and classes:
+
+    | `BaseUtils.check_file` -> :meth:`trassir_script_framework.BaseUtils.is_file_exists`
+    | `BaseUtils.check_folder` -> :meth:`trassir_script_framework.BaseUtils.is_folder_exists`
+    | `BaseUtils.pretty_json` -> :meth:`trassir_script_framework.BaseUtils.to_json`
+    | `PokaYokeObject` -> :meth:`trassir_script_framework.TrObject`
+
+- Fix some typos
+
+
 Version 0.1b
 ==============
 *Released 2019-04-05*

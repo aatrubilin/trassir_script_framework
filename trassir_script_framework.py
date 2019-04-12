@@ -3,7 +3,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.1b</version>
+    <version>0.2b</version>
 </parameters>
 """
 
@@ -13,6 +13,7 @@ import time
 import host
 import json
 import base64
+import ftplib
 import urllib
 import logging
 import threading
@@ -24,7 +25,7 @@ from datetime import datetime, date, timedelta
 from __builtin__ import object as py_object
 
 
-VERSION = {"TITLE": "script_utils", "VERSION": 0.1}
+VERSION = {"TITLE": "script_utils", "VERSION": 0.2}
 
 
 # _SERVICE_VERSION = 0.42
@@ -446,6 +447,21 @@ class BaseUtils:
 
     _host_api = host
     _TEXT_FILE_EXTENSIONS = [".txt", ".csv", ".log"]
+    _LPR_FLAG_BITS = {
+        "LPR_UP": 0x00001,
+        "LPR_DOWN": 0x00002,
+
+        "LPR_BLACKLIST": 0x00004,
+        "LPR_WHITELIST": 0x00008,
+        "LPR_INFO": 0x00010,
+
+        "LPR_FIRST_LANE": 0x01000,
+        "LPR_SECOND_LANE": 0x02000,
+        "LPR_THIRD_LANE": 0x04000,
+
+        "LPR_EXT_DB_ERROR": 0x00020,
+        "LPR_CORRECTED": 0x00040,
+    }
 
     def __init__(self):
         pass
@@ -526,7 +542,7 @@ class BaseUtils:
         return path
 
     @staticmethod
-    def check_file(filepath, tries=1):
+    def is_file_exists(file_path, tries=1):
         """Проверяет, существует ли файл.
 
         Проверка происходит в течении ``tries`` секунд.
@@ -536,38 +552,41 @@ class BaseUtils:
             | Вторая и последующие проверки производятся с ``time.sleep(1)``
 
         Args:
-            filepath (:obj:`str`): Полный путь до файла
+            file_path (:obj:`str`): Полный путь до файла
             tries (:obj:`int`, optional): Количество проверок. По умолчанию ``tries=1``
 
         Returns:
             :obj:`bool`: ``True`` if file exists, ``False`` otherwise
 
         Examples:
-            >>> BaseUtils.check_file("_t1server.settings")
+            >>> BaseUtils.is_file_exists("_t1server.settings")
             True
         """
-        if os.path.isfile(filepath):
+        if os.path.isfile(file_path):
             return True
         for x in xrange(tries - 1):
             time.sleep(1)
-            if os.path.isfile(filepath):
+            if os.path.isfile(file_path):
                 return True
         return False
 
     @staticmethod
-    def check_folder(folder):
+    def is_folder_exists(folder):
         """Проверяет существование папки и доступ на запись.
 
         Args:
             folder (:obj:`str`): Путь к папке.
 
+        Raises:
+            IOError: Если папка не существует
+
         Examples:
-            >>> BaseUtils.check_folder("/test_path")
-            ScriptError: Folder '/test_path' is not exists
+            >>> BaseUtils.is_folder_exists("/test_path")
+            IOError: Folder '/test_path' is not exists
         """
 
         if not os.path.isdir(folder):
-            raise ScriptError("Folder '{}' is not exists".format(folder))
+            raise IOError("Folder '{}' is not exists".format(folder))
 
         readme_file = os.path.join(folder, "readme.txt")
         with open(readme_file, "w") as f:
@@ -595,6 +614,7 @@ class BaseUtils:
 
         Examples:
             >>> BaseUtils.cat("/home/trassir/ Trassir 3 License.txt")
+        .. image:: images/base_utils.cat.png
 
         Raises:
             :class:`TypeError`: Если ``check_ext=True`` расширение файла нет в списке :obj:`_TEXT_FILE_EXTENSIONS`
@@ -639,7 +659,7 @@ class BaseUtils:
         return type(data).__name__
 
     @classmethod
-    def pretty_json(cls, data, indent=4):
+    def to_json(cls, data, indent=4):
         """Сериализация объекта в JSON стрку
 
         Note:
@@ -657,7 +677,7 @@ class BaseUtils:
             >>> obj = {"now": datetime.now()}
             >>> json.dumps(obj)
             TypeError: datetime.datetime(2019, 4, 2, 18, 01, 33, 881000) is not JSON serializable
-            >>> BaseUtils.pretty_json(obj, indent=None)
+            >>> BaseUtils.to_json(obj, indent=None)
             '{"now": "2019-04-02T18:01:33.881000"}'
         """
 
@@ -668,6 +688,42 @@ class BaseUtils:
             ensure_ascii=False,
             default=cls._json_serializer,
         )
+
+    @classmethod
+    def lpr_flags_decode(cls, flags):
+        """Преобразует флаги события AutoTrassir
+
+        Приводит флаги события человекочитаемый список
+
+        Note:
+            Список доступных флагов:
+
+            - ``LPR_UP`` - Направление движения вверх
+            - ``LPR_DOWN`` - Направление движения вниз
+
+            - ``LPR_BLACKLIST`` - Номер в черном списке
+            - ``LPR_WHITELIST`` - Номер в черном списке
+            - ``LPR_INFO`` - Номер в информационном списке
+
+            - ``LPR_FIRST_LANE`` - Автомобиль двигается по первой полосе
+            - ``LPR_SECOND_LANE`` - Автомобиль двигается по второй полосе
+            - ``LPR_THIRD_LANE`` - Автомобиль двигается по третей полосе
+
+            - ``LPR_EXT_DB_ERROR`` - Ошибка во внешнем списке
+            - ``LPR_CORRECTED`` - Номер исправлен оператором
+
+        Args:
+            flags (:obj:`int`): Биты LPR события. Как правило аргумент :obj:`ev.flags`
+                события :obj:`SE_LprEvent` AutoTrassir. Например :obj:`536870917`
+
+        Returns:
+            List[:obj:`str`]: Список флагов
+
+        Examples:
+            >>> BaseUtils.lpr_flags_decode(536870917)
+            ['LPR_UP', 'LPR_BLACKLIST']
+        """
+        return [bit for bit, code in cls._LPR_FLAG_BITS.iteritems() if (flags & code)]
 
     @classmethod
     def get_object(cls, obj_id):
@@ -778,7 +834,7 @@ class BaseUtils:
         """Возвращает путь до папки скриншотов
 
         При этом производит проверку папки методом
-        :func:`~script_framework.BaseUtils.check_folder`
+        :meth:`BaseUtils.is_folder_exists`
 
         Returns:
 
@@ -789,7 +845,7 @@ class BaseUtils:
             '/home/trassir/shots'
         """
         folder = cls._host_api.settings("system_wide_options")["screenshots_folder"]
-        cls.check_folder(folder)
+        cls.is_folder_exists(folder)
         return folder
 
     @classmethod
@@ -903,10 +959,10 @@ class ScriptObject(host.TrassirObject, py_object):
         parent (:obj:`str`, optional): Guid родительского объекта. По умолчанию :obj:`None`
 
     Note:
-        - Имя объекта по умолчанию - :func:`~script_framework.BaseUtils.get_script_name`
+        - Имя объекта по умолчанию - :meth:`BaseUtils.get_script_name`
         - Guid объекта по умолчанию строится по шаблноу ``"{script_guid}_object"``
         - Guid родительского объекта по умолчанию -
-          :func:`~script_framework.BaseUtils.get_server_guid`
+          :meth:`BaseUtils.get_server_guid`
 
     Examples:
         >>> # Создаем объект
@@ -1078,7 +1134,7 @@ class ShotSaver(py_object):
 
         Note:
             По молчанию ``screenshots_folder``  =
-            :func:`~script_framework.BaseUtils.get_screenshot_folder`
+            :meth:`BaseUtils.get_screenshot_folder`
 
         Raises:
             OSError: Если возникает ошибка при создании папки
@@ -1100,9 +1156,8 @@ class ShotSaver(py_object):
 
         Note:
             - ``dt=None`` делает скриншот за текущее время
-            - ``file_name=None`` сохраняет скриншот с именем
-              по шаблону ``"{name} (%Y.%m.%d %H-%M-%S).jpg"``, где ``{name}``
-              = :func:`~script_framework.BaseUtils.get_object_name_by_guid`
+            - ``file_name=None`` сохраняет скриншот с именем по шаблону
+              ``"{name} (%Y.%m.%d %H-%M-%S).jpg"``, где ``{name}`` - имя канала
             - ``file_path=None`` сохраняет скриншот с выбранного канала
               в папку :attr:`~script_framework.ShotSaver.screenshots_folder`
 
@@ -1114,8 +1169,7 @@ class ShotSaver(py_object):
             file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
 
         Returns:
-            :obj:`str`: Полный путь до скриншота с использованием функции
-            :func:`~script_framework.BaseUtils.win_encode_path`
+            :obj:`str`: Полный путь до скриншота
 
         Raises:
             ValueError: Если в guid канала отсутствует guid сервера
@@ -1147,30 +1201,37 @@ class ShotSaver(py_object):
             channel_full_guid, file_name, file_path, ts
         )
 
-        return BaseUtils.win_encode_path(os.path.join(file_path, file_name))
+        return os.path.join(file_path, file_name)
 
     @BaseUtils.run_as_thread_v2()
-    def async_shot(self, callback, *args, **kwargs):
+    def async_shot(
+        self, callback, channel_full_guid, dt=None, file_name=None, file_path=None
+    ):
         """Вызывает ``callback`` после сохнанения скриншота
 
         * Метод работает в отдельном потоке
-        * Вызывает функцию :func:`~script_framework.ShotSaver.shot`
-        * Ждет выполнения функции :func:`~script_framework.BaseUtils.check_file` ``tries=10``
+        * Вызывает функцию :meth:`ShotSaver.shot`
+        * Ждет выполнения функции :meth:`BaseUtils.check_file` ``tries=10``
         * Вызвает ``callback`` функцию
 
         Args:
             callback (:obj:`function`): Callable function
-            args: Позиционные аргументы функции :func:`~script_framework.ShotSaver.shot`
-            kwargs: Именованные аргументы функции :func:`~script_framework.ShotSaver.shot`
+            channel_full_guid (:obj:`str`): Полный guid анала. Например: ``"CFsuNBzt_pV4ggECb"``
+            dt (:obj:`datetime.datetime`, optional): :obj:`datetime.datetime` для скриншота.
+                По умолчанию :obj:`None`
+            file_name (:obj:`str`, optional): Имя файла с расширением. По умолчанию :obj:`None`
+            file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
         """
         shot_file = ""
         for _ in xrange(self._ASYNC_SHOT_TRIES):
-            shot_file = self.shot(*args, **kwargs)
-            if BaseUtils.check_file(shot_file, self._AWAITING_FILE):
-                callback(True, shot_file)
+            shot_file = self.shot(
+                channel_full_guid, dt=dt, file_name=file_name, file_path=file_path
+            )
+            if BaseUtils.is_file_exists(shot_file, self._AWAITING_FILE):
+                self._host_api.timeout(100, lambda: callback(True, shot_file))
                 break
         else:
-            callback(False, shot_file)
+            self._host_api.timeout(100, lambda: callback(False, shot_file))
 
 
 class VideoExporterError(ScriptError):
@@ -1231,8 +1292,7 @@ class VideoExporter(py_object):
         путь для экспорта видео.
 
         Note:
-            По молчанию ``export_folder``  =
-            :func:`~script_framework.BaseUtils.get_screenshot_folder`
+            По молчанию ``export_folder`` = :meth:`BaseUtils.get_screenshot_folder`
 
         Raises:
             OSError: Если возникает ошибка при создании папки
@@ -1290,10 +1350,14 @@ class VideoExporter(py_object):
             return
         elif status in [0, 2]:
             """Export failed"""
-            callback(False, file_path, channel_full_guid)
+            self._host_api.timeout(
+                100, lambda: callback(False, file_path, channel_full_guid)
+            )
         else:
             """Export success"""
-            callback(True, file_path, channel_full_guid)
+            self._host_api.timeout(
+                100, lambda: callback(True, file_path, channel_full_guid)
+            )
 
         self._now_exporting = False
         self._check_queue()
@@ -1460,6 +1524,24 @@ class Template(py_object):
         Если вручную создать два или большее шаблона с одинаковыми именами
         данный класс выберет первый попавшийся шаблон с заданным именем.
 
+    Warning:
+            Работа с контентом шаблона может привести к крашам трассира.
+            Используйте данный класс на свой страх и риск!
+
+    Tip:
+        Для понимания, как формируется контент шаблон отредактируйте любой
+        шаблон вручную и посмотрите что получится скрытых настройках трассира
+        (активируются нажатием клавиши F4 в настройках трассира) `Настройки/Шабоны/<Имя шаблона>/content`
+
+        Ниже предсталвены некоторые примеры шаблонов
+
+        - Вывод одного канала ``S0tE8nfg_Or3QZu4D``
+          :obj:`gui7(DEWARP_SETTINGS,zwVj07w0,dewarp(),1,S0tE8nfg_Or3QZu4D)`
+        - Вывод шаблона 4х4 с каналами двумя ``Kpid6EC0_Or3QZu4D``, ``ZRtXLrgu_Or3QZu4D``
+          :obj:`gui7(DEWARP_SETTINGS,zwVj07w0,dewarp(),4,Kpid6EC0_Or3QZu4D,ZRtXLrgu_Or3QZu4D,,)`
+        - Вывод шаблон с минибраузером и ссылкой на https://www.google.com/
+          :obj:`minibrowser(0,htmltab(,https://www.google.com/))`
+
     Args:
         template_name (:obj:`str`): Имя шаблон
 
@@ -1568,32 +1650,22 @@ class Template(py_object):
         self._operator_gui.show(self.guid, monitor)
 
 
-class PokaYokeError(ScriptError):
-    """Base PokaYoke Exception"""
-
-    pass
-
-
-class TrassirError(PokaYokeError):
-    """Exception if bad trassir version"""
-
-    pass
-
-
-class PokaYokeObject(py_object):
-    """Вспомогательный класс для класса :class:`~script_framework.PokaYoke`
+class TrObject(py_object):
+    """Вспомогательный класс для работы с объектами Trassir
 
     Attributes:
-        obj (:obj:`SE_Object`): Объект trassir ``object('{guid}')``
-        obj_methods (:obj:`list`): Список методов объекта ``obj``
-        name (:obj:`str`): Имя объекта
+        obj (:obj:`SE_Object`): Объект trassir :obj:`object('{guid}')` или :obj:`None`
+        obj_methods (List[:obj:`str`]): Список методов объекта :attr:`TrObject.obj`
+        name (:obj:`str`): Имя объекта или его guid
         guid (:obj:`str`): Guid объекта
-        full_guid (:obj:`str`): Guid объекта + guid сервера
-        type (:obj:`str`): Тип объекта
-        path (:obj:`str`): Путь в настройка
-        parent (:obj:`str`): Guid родительского объекта
-        server (:obj:`str`): Guid сервера
-        settings (:obj:`SE_Settings`): Объект настроек ``settings('{path}')``
+        full_guid (:obj:`str`): Полный guid :obj:`{guid объекта}_{guid сервера}`
+            или :obj:`None`
+        type (:obj:`str`): Тип объекта, например :obj:`"RemoteServer"`, :obj:`"Channel"`,
+            :obj:`"Grabber"`, :obj:`"User"`, и др.
+        path (:obj:`str`): Путь в настройках или :obj:`None`
+        parent (:obj:`str`): Guid родительского объекта или :obj:`None`
+        server (:obj:`str`): Guid сервера или :obj:`None`
+        settings (:obj:`SE_Settings`): Объект настроек ``settings('{path}')`` или :obj:`None`
 
     Raises:
         TypeError: Если неправильные параметры объекта
@@ -1617,8 +1689,6 @@ class PokaYokeObject(py_object):
                         obj
                     )
                 )
-        elif isinstance(obj, dict):
-            self._load_from_dict(obj)
         else:
             raise TypeError("Unexpected object type '{}'".format(type(obj).__name__))
 
@@ -1647,7 +1717,7 @@ class PokaYokeObject(py_object):
 
         Args:
             path (str): Full Trassir settings path;
-                example: '/pV4ggECb/persons/n68LOBhG' returns 'pV4ggECb'
+                example: '/pV4ggECb/_persons/n68LOBhG' returns 'pV4ggECb'
         """
         try:
             server = path.split("/", 2)[1]
@@ -1694,14 +1764,20 @@ class PokaYokeObject(py_object):
         """Preparing attributes from SE_Settings object"""
         self.obj = BaseUtils.get_object(obj.guid)
         self.obj_methods = self._get_object_methods()
-        self.name = self._check_object_name(obj.name)
+
+        try:
+            obj_name = obj.name
+        except KeyError:
+            obj_name = obj.guid
+
+        self.name = self._check_object_name(obj_name)
         self.guid = obj.guid
         self.type = obj.type
         self.path = obj.path
         self.server = self._parse_server_from_path(obj.path)
         self.settings = obj
 
-        if self.server:
+        if self.server and self.server != self.guid:
             self.full_guid = "{0.guid}_{0.server}".format(self)
 
     def _load_from_tuple(self, obj):
@@ -1717,74 +1793,57 @@ class PokaYokeObject(py_object):
         if self.server and self.server != self.guid:
             self.full_guid = "{0.guid}_{0.server}".format(self)
 
-    def _load_from_dict(self, obj):
-        """Preparing attributes from dict object"""
-        self.name = obj.get("name")
-        self.guid = obj.get("guid")
-        self.type = obj.get("type")
-        self.path = obj.get("path")
-        self.parent = obj.get("parent")
-        self.server = obj.get("server")
-
-        if self.guid:
-            self.obj = BaseUtils.get_object(self.guid)
-            self.obj_methods = self._get_object_methods()
-
-        if self.path:
-            try:
-                self.settings = self._host_api.settings(self.path)
-            except KeyError:
-                self.settings = None
-
-        if self.server and self.server != self.guid:
-            self.full_guid = "{0.guid}_{0.server}".format(self)
-
     def __repr__(self):
-        return "PokaYokeObject({})".format(self.__dict__)
+        return "TrObject('{}')".format(self.name)
 
     def __str__(self):
         return "{self.type}: {self.name} ({self.guid})".format(self=self)
 
 
-class PokaYoke(py_object):
-    """Класс для защиты от дурака
+class ParameterError(ScriptError):
+    """Ошибка в параметрах скрипта"""
 
-    Позволяет блокировать запуск скрипта на ПО, где это
-    не предусмотрено (например, на клиенте или TOS).
-    А также позволяет легко получить доступ к различным
-    объектам трассира (например, каналам или ip устройствам).
-    """
+    pass
 
-    _EMAIL_REGEXP = re.compile(
-        r"[^@]+@[^@]+\.[^@]+"
-    )  # Default regex to check emails list
-    _PHONE_REGEXP = re.compile(r"[^\d,;]")  # Default regex to check phone list
+
+class BasicObject(py_object):
+    """"""
 
     def __init__(self, host_api=host):
         self._host_api = host_api
-        self._server_guid = host_api.settings("").guid
+        self.this_server_guid = BaseUtils.get_server_guid()
 
-    @staticmethod
-    def _check_unique_name(objects):
+    class UniqueNameError(ScriptError):
+        """Имя объекта не уникально"""
+
+        pass
+
+    class ObjectsNotFoundError(ScriptError):
+        """Не найдены объекты с заданными именами"""
+
+        pass
+
+    def _check_unique_name(self, objects, object_names):
         """Check if all objects name are unique
 
         Args:
-            objects (dict): Objects dict from _get_objects_from_settings
+            objects (list): Objects list from _get_objects_from_settings
 
         Raises:
-            PokaYokeError: If some object name is not uniques
+            UniqueNameError: If some object name is not uniques
         """
         unique_names = []
-        for obj in objects.values():
-            if obj.name not in unique_names:
-                unique_names.append(obj.name)
-            else:
-                raise PokaYokeError(
-                    "{obj.type} name '{obj.name}' is not unique!".format(obj=obj)
-                )
+        for obj in objects:
+            if obj.name in object_names:
+                if obj.name not in unique_names:
+                    unique_names.append(obj.name)
+                else:
+                    raise self.UniqueNameError(
+                        "Найдено несколько объектов {obj.type} с одинаковым именем '{obj.name}'! "
+                        "Задайте уникальные имена".format(obj=obj)
+                    )
 
-    @staticmethod
-    def _objects_str_to_list(objects):
+    def _objects_str_to_list(self, objects):
         """Split object names if objects is str and strip each name
 
         Args:
@@ -1794,7 +1853,7 @@ class PokaYoke(py_object):
             list: Stripped Trassir object names
 
         Raises:
-            PokaYoke: If object name selected more than once
+            ScriptError: If object name selected more than once
         """
         if isinstance(objects, str):
             objects = objects.split(",")
@@ -1803,7 +1862,9 @@ class PokaYoke(py_object):
         for name in objects:
             strip_name = name.strip()
             if strip_name in names:
-                raise PokaYokeError("Object '{}' selected more than once".format(name))
+                raise ParameterError(
+                    "Объект '{}' выбран несколько раз".format(name)
+                )
             names.append(strip_name)
 
         return names
@@ -1812,32 +1873,30 @@ class PokaYoke(py_object):
         """Filter object by names
 
         Args:
-            objects (dict): PokaYokeObject objects dictionary
+            objects (list): TrObject objects list
             object_names (str|list): Trassir object names in comma spaced string or list
 
         Raises:
-            PokaYokeError: If len(object_name) != len(filtered_object)
+            ObjectsNotFoundError: If len(object_name) != len(filtered_object)
         """
         object_names = self._objects_str_to_list(object_names)
 
-        self._check_unique_name(objects)
+        self._check_unique_name(objects, object_names)
 
-        filtered_object = {
-            guid: obj for guid, obj in objects.iteritems() if obj.name in object_names
-        }
+        filtered_object = [obj for obj in objects if obj.name in object_names]
 
         if len(filtered_object) != len(object_names):
             channels_not_found = set(object_names) - set(
-                obj.name for obj in filtered_object.values()
+                obj.name for obj in filtered_object
             )
 
             try:
-                object_type = objects.values()[0].type
+                object_type = objects[0].type
             except IndexError:
                 object_type = "Unknown"
 
-            raise PokaYokeError(
-                "Can't find {object_type}: {names}".format(
+            raise self.ObjectsNotFoundError(
+                "Не найдены объекты {object_type}: {names}".format(
                     object_type=object_type,
                     names=", ".join(name for name in channels_not_found),
                 )
@@ -1845,28 +1904,32 @@ class PokaYoke(py_object):
 
         return filtered_object
 
+
+class ObjectFromSetting(BasicObject):
+    """"""
+
+    def __init__(self):
+        super(ObjectFromSetting, self).__init__()
+
     def _load_objects_from_settings(self, settings_path, obj_type, sub_condition=None):
         """Load objects from Trassir settings
 
         Args:
-            settings_path (str): Trassir settings path; example: "scripts";
-                click F4 in the Trassir settings window to show hidden parameters
-            obj_type (str|list): Loading object type; example: "EmailAccount"
+            settings_path (:obj:`str`): Trassir settings path. Example ``"scripts"``.
+                Click F4 in the Trassir settings window to show hidden parameters.
+            obj_type (:obj:`str` | :obj:`list`): Loading object type. Example ``"EmailAccount"``
             sub_condition (function, optional): Function with SE_Settings as argument to filter objects
 
         Returns:
-            dict: PokaYokeObject objects dictionary
-                example: objects = {'XXoyXd3P': PokaYokeObject(...),}
-
-        Raises:
-            PokaYokeError: If ban_empty_result=True and no one object found,
+            list: TrObject objects list
+                Example [TrObject(...), TrObject(...), ...]
         """
         try:
             settings = self._host_api.settings(settings_path)
         except KeyError:
             settings = None
 
-        objects = {}
+        objects = []
         if settings is not None:
             if isinstance(obj_type, str):
                 obj_type = [obj_type]
@@ -1877,8 +1940,7 @@ class PokaYoke(py_object):
             for obj in settings.ls():
                 if obj.type in obj_type:
                     if sub_condition(obj):
-                        objects[obj.guid] = PokaYokeObject(obj)
-
+                        objects.append(TrObject(obj))
         return objects
 
     def _get_objects_from_settings(
@@ -1886,54 +1948,51 @@ class PokaYoke(py_object):
         settings_path,
         object_type,
         object_names=None,
-        server_guids=None,
+        server_guid=None,
         ban_empty_result=False,
         sub_condition=None,
     ):
-        """Check if objects exists and returns dict from _load_objects_from_settings
+        """Check if objects exists and returns list from _load_objects_from_settings
 
         Note:
              If object_names is not None - checking if all object names are unique
 
         Args:
-            settings_path (str): Trassir settings path; example: "scripts";
-                click F4 in the Trassir settings window to show hidden parameters
-            object_type (str|list): Loading object type; example: "EmailAccount"
-            object_names (str|list, optional): Comma spaced string or list of object names; default: None
-            server_guids (str|list, optional): Server guids; default: None
-            ban_empty_result (bool, optional): If True - raise PokaYokeError if no one object found
-            sub_condition (func, optional) : Function with SE_Settings as argument to filter objects
+            settings_path (:obj:`str`): Trassir settings path. Example ``"scripts"``.
+                Click F4 in the Trassir settings window to show hidden parameters.
+            object_type (:obj:`str` | :obj:`list`): Loading object type. Example ``"EmailAccount"``
+            object_names (:obj:`str` | :obj:`list`, optional): Comma spaced string or 
+                list of object names. Default :obj:`None`
+            server_guid (:obj:`str` | :obj:`list`, optional): Server guid. Default :obj:`None`
+            ban_empty_result (:obj:`bool`, optional): If True - raise error if no one object found
+            sub_condition (:obj:`func`, optional) : Function with SE_Settings as argument to filter objects
 
         Returns:
-            dict: Trassir dict from _load_objects_from_settings
+            list: Trassir list from _load_objects_from_settings
 
         Raises:
-            PokaYokeError: If can't find channel
+            ObjectsNotFoundError: If can't find channel
         """
-        if not object_type:
-            raise PokaYokeError("Error object type '{}'".format(object_type))
-
         if object_names == "":
-            raise PokaYokeError("'{}' not selected".format(object_type))
+            raise ParameterError("'{}' не выбраны".format(object_type))
 
-        if server_guids is None:
-            server_guids = self.get_servers().keys()
-        else:
-            if isinstance(server_guids, str):
-                server_guids = [server_guids]
+        if server_guid is None:
+            server_guid = self.this_server_guid
 
-        objects = {}
-        for server_guid in server_guids:
-            objects.update(
-                self._load_objects_from_settings(
-                    settings_path.format(server_guid=server_guid),
-                    object_type,
-                    sub_condition,
-                )
+        if isinstance(server_guid, str):
+            server_guid = [server_guid]
+
+        objects = []
+
+        for guid in server_guid:
+            objects += self._load_objects_from_settings(
+                settings_path.format(server_guid=guid), object_type, sub_condition
             )
 
         if ban_empty_result and not objects:
-            raise PokaYokeError("No '{}' found".format(object_type))
+            raise self.ObjectsNotFoundError(
+                "Не найдено ниодного объекта '{}'".format(object_type)
+            )
 
         if object_names is None:
             return objects
@@ -1941,532 +2000,1001 @@ class PokaYoke(py_object):
         else:
             return self._filter_objects_by_name(objects, object_names)
 
-    def _load_objects_from_list(self, obj_type, sub_condition=None):
-        """Load objects from Trassir objects_list method
 
-        Args:
-            obj_type (str|list): Loading object type; example: "EmailAccount"
-            sub_condition (function, optional): Function with SE_Settings as argument to filter objects
+class Servers(ObjectFromSetting):
+    """Класс для работы с серверами
 
-        Returns:
-            dict: PokaYokeObject objects dictionary
-                example: objects = {'XXoyXd3P': PokaYokeObject(...),}
+    Examples:
+        >>> srvs = Servers()
+        >>> local_srv = srvs.get_local()
+        [TrObject('Клиент')]
+        >>> # Првоерим "Здоровье" локального сервера
+        >>> local_srv[0].obj.state("server_health")
+        'Health Problem'
+    """
 
-        Raises:
-            PokaYokeError: If ban_empty_result=True and no one object found,
-        """
-        if sub_condition is None:
-            sub_condition = BaseUtils.do_nothing
+    def __init__(self):
+        super(Servers, self).__init__()
 
-        objects = {}
-        for obj in self._host_api.objects_list(obj_type):
-            if sub_condition(obj):
-                objects[obj[1]] = PokaYokeObject(obj)
-
-        return objects
-
-    def _get_objects_from_list(
-        self,
-        object_type,
-        object_names=None,
-        server_guids=None,
-        ban_empty_result=False,
-        sub_condition=None,
-    ):
-        """Check if objects exists and returns dict from _load_objects_from_settings
-
-        Note:
-             If object_names is not None - checking if all object names are unique
-
-        Args:
-            object_type (str|list): Loading object type; example: "EmailAccount"
-            object_names (str|list, optional): Comma spaced string or list of object names; default: None
-            server_guids (str|list, optional): Server guids; default: None
-            ban_empty_result (bool, optional): If True - raise PokaYokeError if no one object found
-            sub_condition (func, optional) : Function with SE_Settings as argument to filter objects
+    def get_local(self):
+        """Возвращает локальный сервер (на котором запущен скрипт)
 
         Returns:
-            dict: Trassir dict from _load_objects_from_settings
-
-        Raises:
-            PokaYokeError: If can't find channel
+            List[:class:`TrObject`]: Список объектов
         """
-        if not object_type:
-            raise PokaYokeError("Error object type '{}'".format(object_type))
+        return self._load_objects_from_settings("/", ["Client", "LocalServer"])
 
-        if object_names == "":
-            raise PokaYokeError("'{}' not selected".format(object_type))
-
-        if server_guids is None:
-            server_guids = self.get_servers().keys()
-            server_guids.append(None)
-        else:
-            if isinstance(server_guids, str):
-                server_guids = [server_guids]
-
-        objects = self._load_objects_from_list(object_type, sub_condition)
-
-        objects = {
-            guid: data
-            for guid, data in objects.iteritems()
-            if data.server in server_guids
-        }
-
-        if ban_empty_result and not objects:
-            raise PokaYokeError("No '{}' found".format(object_type))
-
-        if object_names is None:
-            return objects
-
-        else:
-            return self._filter_objects_by_name(objects, object_names)
-
-    @staticmethod
-    def ban_tos():
-        """Блокирует запуск скрипта на `Trassir OS`
-
-        Raises:
-            OSError: Если скрипт запускается на `Trassir OS`
-
-        Examples:
-            >>> pk = PokaYoke()
-            >>> pk.ban_tos()
-            OSError: Script is unavailable for TrassirOS
-        """
-        if os.name != "nt":
-            raise OSError("Script is unavailable for TrassirOS")
-
-    @staticmethod
-    def ban_win():
-        """Блокирует запуск скрипта на `Windows OS`
-
-        Raises:
-            OSError: Если скрипт запускается на `Windows OS`
-
-        Examples:
-            >>> pk = PokaYoke()
-            >>> pk.ban_win()
-            OSError: Script is unavailable for WindowsOS
-        """
-        if os.name == "nt":
-            raise OSError("Script is unavailable for WindowsOS")
-
-    def ban_client(self):
-        """Блокирует запуск скрипта на `Trassir Client`
-
-        Raises:
-            TrassirError: Если скрипт запускается на `Trassir Client`
-
-        Examples:
-            >>> pk = PokaYoke()
-            >>> pk.ban_client()
-            TrassirError: Script is unavailable for Trassir Client
-        """
-        if self._server_guid == "client":
-            raise TrassirError("Script is unavailable for Trassir Client")
-
-    def ban_daemon(self):
-        """Блокирует запуск скрипта на сервре Trassir, который запущен как служба
-
-        Raises:
-            TrassirError: Если скрипт запускается на сервре Trassir,
-                который запущен как служба
-
-        Examples:
-            >>> pk = PokaYoke()
-            >>> pk.ban_daemon()
-            TrassirError: Script is unavailable for Trassir Daemon
-        """
-        if self._host_api.settings("system_wide_options")["daemon"]:
-            raise TrassirError("Script is unavailable for Trassir Daemon")
-
-    def get_servers(self):
-        """Возвращает список всех серверов
+    def get_remote(self):
+        """Возвращает список удаленных серверов
 
         Returns:
-            Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-            объектов, вида ``{"guid": PokaYokeObject}``
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._load_objects_from_settings("/", "RemoteServer")
 
-        Examples:
-            >>> pk = PokaYoke()
-            >>> all_servers = pk.get_servers()
-            >>> all_servers.keys()  # Guid всех доступных серверов
-            ['FHqSOje4', 'client', 'Or3QZu4D', 'pV4ggECb', 'oTyVIzcv']
-            >>>
-            >>> all_servers["client"]
-            PokaYokeObject({
-                'obj': object('client'),
-                'obj_methods': [
-                    'activate_on_state_changes',
-                    'call_method',
-                    'state'
-                ],
-                'name': 'Клиент',
-                'guid': 'client',
-                'full_guid': None,
-                'type': 'Client',
-                'path': '/client',
-                'parent': None
-                'server': 'client',
-                'settings': settings('/client'),
-            })
+    def get_all(self):
+        """Возвращает список всех доступных серверов
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
         """
         return self._load_objects_from_settings(
             "/", ["Client", "LocalServer", "RemoteServer"]
         )
 
-    def get_channels(
-        self, channel_names=None, server_guids=None, add_zombie_channels=False
-    ):
-        """Возвращает список каналов
 
-        По умолчанию метод возвращает все доступные каналы, исключая потерянные.
+class Channels(ObjectFromSetting):
+    """Класс для работы с каналами
 
-        Tip:
-            | Задайте список имен нужных каналов ``channel_names`` - для проверки
-              и если каналов не будет найден - метод вызовет :obj:`PokaYokeError`
-            | При этом метод вернет только выбранные каналы.
+    See Also:
+        `Каналы - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-channels-folder.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> channels = Channels()
+        >>> selected_channels = channels.get_enabled("AC-D2121IR3W 2,AC-D9141IR2 1")
+        >>> selected_channels
+        [TrObject('AC-D2121IR3W 2'), TrObject('AC-D9141IR2 1')]
+        >>>
+        >>> # Включим ручную запись на выбранных каналах
+        >>> for channel in selected_channels:
+        >>>     channel.obj.manual_record_start()
+        >>>
+        >>> # Или добавим к имени канала его guid
+        >>> for channel in selected_channels:
+        >>>     channel.settings["name"] += " ({})".format(channel.guid)
+    """
+
+    def __init__(self, server_guid=None):
+        super(Channels, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных каналов
 
         Args:
-            channel_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - каналы,
-                разделенные запятыми или :obj:`list` - список каналов. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-            add_zombie_channels (:obj:`bool`, optional): Загружать потерянные каналы.
-                По умолчанию :obj:`False`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-
-        Examples:
-            >>> pk = PokaYoke()
-
-            >>> # Метод не даст загрузить несуществующий канал
-            >>> channels = pk.get_channels("AC-D2101IR3 1,Несуществующий канал")
-            PokaYokeError: Can't find Channel: Несуществующий канал
-
-            >>> # Также возникнет ошибка, если найдены каналы с неуникальным именем
-            >>> # При этом проверяются все каналы, не зависимо от выбранных
-            >>> channels = pk.get_channels("AC-D2101IR3 1")
-            PokaYokeError: Channel name 'DS-I120 1' is not unique!
-
-            >>> # Загружаем канал с именем "AC-D2101IR3 1"
-            >>> channels = pk.get_channels("AC-D2101IR3 1")
-            >>> channels
-            {
-                'o83ykOH4': PokaYokeObject({
-                    'obj': object('o83ykOH4'),
-                    'obj_methods': [
-                        'activate_on_state_changes',
-                        'call_method',
-                        'export_archive',
-                        'manual_record_start',
-                        'manual_record_stop',
-                        'merge_interest_off',
-                        'merge_interest_on',
-                        'ptz_position_query',
-                        'ptz_preset',
-                        'record',
-                        'record_off',
-                        'record_on',
-                        'screenshot',
-                        'screenshot_ex',
-                        'screenshot_v2',
-                        'screenshot_v2_figures',
-                        'set_watermark',
-                        'state'
-                    ],
-                    'name': 'AC-D2101IR3 1',
-                    'guid': 'o83ykOH4',
-                    'full_guid': 'o83ykOH4_pV4ggECb',
-                    'type': 'Channel',
-                    'path': '/pV4ggECb/channels/o83ykOH4',
-                    'parent': None
-                    'server': 'pV4ggECb',
-                    'settings': settings('/pV4ggECb/channels/o83ykOH4'),
-                })
-            }
-
-            >>> # После загрузки мы можем работать непосредственно с обектом
-            >>> selected_channel = channels["o83ykOH4"]
-            >>>
-            >>> # Например включить ручную запись на канале
-            >>> selected_channel.obj.manual_record_start()
-            >>>
-            >>> # Или поменять имя канала
-            >>> selected_channel.settings["name"] = "Камера на складе"
+            List[:class:`TrObject`]: Список объектов
         """
 
-        if add_zombie_channels:
-            sub_condition = None
-        else:
-
-            def sub_condition(sett):
-                not_zombie = 1 - sett["archive_zombie_flag"]
-                if not_zombie:
-                    try:
-                        return self._host_api.settings(sett.cd("info")["grabber_path"])[
-                            "grabber_enabled"
-                        ]
-                    except KeyError:
-                        return 0
-                return 0
+        def sub_condition(sett):
+            not_zombie = 1 - sett["archive_zombie_flag"]
+            if not_zombie:
+                try:
+                    return self._host_api.settings(sett.cd("info")["grabber_path"])[
+                        "grabber_enabled"
+                    ]
+                except KeyError:
+                    return 0
+            return 0
 
         return self._get_objects_from_settings(
             "/{server_guid}/channels",
             "Channel",
-            object_names=channel_names,
-            server_guids=server_guids,
+            object_names=names,
+            server_guid=self.server_guid,
             sub_condition=sub_condition,
         )
 
-    def get_ip_cameras(
-        self, ip_camera_names=None, server_guids=None, only_enabled=True
-    ):
-        """Возвращает список ip устройств
-
-        По умолчанию метод возвращает все доступные устрйоства, исключая отключенные.
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных каналов
 
         Args:
-            ip_camera_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - устройства,
-                разделенные запятыми или :obj:`list` - список устройств. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-            only_enabled (:obj:`bool`, optional): Загружать только включенные устройства
-                По умолчанию :obj:`True`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
-        sub_condition = None
-        if only_enabled:
 
-            def sub_condition(sett):
+        def sub_condition(sett):
+            zombie = sett["archive_zombie_flag"]
+            if not zombie:
                 try:
-                    return sett["grabber_enabled"]
+                    return (
+                        1
+                        - self._host_api.settings(sett.cd("info")["grabber_path"])[
+                            "grabber_enabled"
+                        ]
+                    )
                 except KeyError:
-                    return 0
+                    return 1
+            return 1
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/channels",
+            "Channel",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_all(self, names=None):
+        """Возвращает список всех каналов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/channels",
+            "Channel",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Devices(ObjectFromSetting):
+    """Класс для работы с ip устройствами
+
+    See Also:
+        `IP-устройства - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-ip-cameras-folder.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> devices = Devices()
+        >>> enabled_devices = devices.get_enabled()
+        >>> enabled_devices
+        [TrObject('AC-D2121IR3W'), TrObject('AC-D5123IR32'), ...]
+        >>>
+        >>> # Перезагрузим все устройства
+        >>> for dev in enabled_devices:
+        >>>     dev.settings["reboot"] = 1
+    """
+
+    def __init__(self, server_guid=None):
+        super(Devices, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных устройств
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["grabber_enabled"]
+            except KeyError:
+                return 0
 
         return self._get_objects_from_settings(
             "/{server_guid}/ip_cameras",
             "Grabber",
-            ip_camera_names,
-            server_guids,
+            object_names=names,
+            server_guid=self.server_guid,
             sub_condition=sub_condition,
         )
 
-    # def get_templates(self, template_names=None):
-    #     """Get templates
-    #
-    #     Args:
-    #         template_names (str|list, optional): Comma spaced string or list of template names; default: None
-    #
-    #     Returns:
-    #          dict: Trassir dict from _load_objects_from_settings
-    #
-    #     Raises:
-    #         PokaYokeError: If can't find object
-    #     """
-    #
-    #     return self._get_objects_from_settings("templates", "Template", template_names)
-
-    def get_rules(self, rule_names=None, server_guids=None):
-        """Возвращает список правил
-
-        По умолчанию метод возвращает все доступные правила.
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных устройств
 
         Args:
-            rule_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия правил,
-                разделенные запятыми или :obj:`list` - список правил. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
+
+        def sub_condition(sett):
+            try:
+                return 1 - sett["grabber_enabled"]
+            except KeyError:
+                return 1
 
         return self._get_objects_from_settings(
-            "/{server_guid}/scripts", "Rule", rule_names, server_guids
+            "/{server_guid}/ip_cameras",
+            "Grabber",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
         )
 
-    def get_scripts(self, script_names=None, server_guids=None):
-        """Возвращает список скриптов
+    def get_all(self, names=None):
+        """Возвращает список всех устройств
 
         Args:
-            script_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия скриптов,
-                разделенные запятыми или :obj:`list` - список скриптов. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
+        return self._get_objects_from_settings(
+            "/{server_guid}/ip_cameras",
+            "Grabber",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Scripts(ObjectFromSetting):
+    """Класс для работы со скриптами
+
+    See Also:
+        `Скрипты - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-script-feature.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> scripts = Scripts()
+        >>> all_scripts = scripts.get_all()
+        >>> all_scripts
+        [TrObject('Новый скрипт'), TrObject('HDD Health Monitor'), TrObject('Password Reminder')]
+        >>>
+        >>> # Отключим все скрипты
+        >>> for script in all_scripts:
+        >>>     script.settings["enable"] = 0
+    """
+
+    def __init__(self, server_guid=None):
+        super(Scripts, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных скриптов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["enable"]
+            except KeyError:
+                return 0
 
         return self._get_objects_from_settings(
-            "/{server_guid}/scripts", "Script", script_names, server_guids
+            "/{server_guid}/scripts",
+            "Script",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
         )
 
-    def get_schedules(self, schedule_names=None, server_guids=None):
-        """Возвращает список расписаний
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных скриптов
 
         Args:
-            schedule_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия расписаний,
-                разделенные запятыми или :obj:`list` - список расписаний. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
+
+        def sub_condition(sett):
+            try:
+                return 1 - sett["enable"]
+            except KeyError:
+                return 1
 
         return self._get_objects_from_settings(
-            "/{server_guid}/scripts", "Schedule", schedule_names, server_guids
+            "/{server_guid}/scripts",
+            "Script",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
         )
 
-    def get_template_loops(self, template_loop_names=None, server_guids=None):
-        """Возвращает список циклических просмотров шаблонов
+    def get_all(self, names=None):
+        """Возвращает список всех скриптов
 
         Args:
-            template_loop_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                циклических просмотров шаблонов, разделенные запятыми или :obj:`list` -
-                список циклических просмотров шаблонов. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "Script",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Rules(ObjectFromSetting):
+    """Класс для работы с правилами
+
+    See Also:
+        `Правила - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-rule.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> rules = Rules()
+        >>> all_rules = rules.get_all()
+        >>> all_rules
+        [TrObject('!Rule'), TrObject('NEW RULE'), TrObject('Новое правило')]
+        >>>
+        >>> # Отключим все правила
+        >>> for rule in all_rules:
+        >>>     rule.settings["enable"] = 0
+    """
+
+    def __init__(self, server_guid=None):
+        super(Rules, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных правил
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["enable"]
+            except KeyError:
+                return 0
 
         return self._get_objects_from_settings(
-            "/{server_guid}/scripts", "TemplateLoop", template_loop_names, server_guids
+            "/{server_guid}/scripts",
+            "Rule",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
         )
 
-    def get_networks(self, network_names=None, server_guids=None, only_enabled=True):
-        """Возвращает список сетевых подключений
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных правил
 
         Args:
-            network_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                сетевых подключений, разделенные запятыми или :obj:`list` - список
-                сетевых подключений. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-            only_enabled (:obj:`bool`, optional): Загружать только активные сетевые
-                подключения. По умолчанию :obj:`True`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
-        sub_condition = None
-        if only_enabled:
 
-            def sub_condition(sett):
-                try:
-                    return sett["should_be_connected"]
-                except KeyError:
-                    return 0
+        def sub_condition(sett):
+            try:
+                return 1 - sett["enable"]
+            except KeyError:
+                return 1
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "Rule",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_all(self, names=None):
+        """Возвращает список всех правил
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен. По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "Rule",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Schedules(ObjectFromSetting):
+    """Класс для работы с расписаниями
+
+    See Also:
+        `Расписания - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-schedule.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> schedules = Schedules()
+        >>> my_schedule = schedules.get_enabled("!Schedule")[0]
+        >>> my_schedule.obj.state("color")
+        'Red'
+    """
+
+    def __init__(self, server_guid=None):
+        super(Schedules, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных расписаний
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["enable"]
+            except KeyError:
+                return 0
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "Schedule",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных расписаний
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return 1 - sett["enable"]
+            except KeyError:
+                return 1
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "Schedule",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_all(self, names=None):
+        """Возвращает список всех расписаний
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "Schedule",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class TemplateLoops(ObjectFromSetting):
+    """Класс для работы с циклическими просмотрами шаблонов
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> tmplate_loops = TemplateLoops()
+        >>> tmplate_loops.get_all()
+        [TrObject('Новый циклический просмотр')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(TemplateLoops, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных циклических просмотров шаблонов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["enable"]
+            except KeyError:
+                return 0
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "TemplateLoop",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных циклических просмотров шаблонов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return 1 - sett["enable"]
+            except KeyError:
+                return 1
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "TemplateLoop",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_all(self, names=None):
+        """Возвращает список всех циклических просмотров шаблонов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "TemplateLoop",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class EmailAccounts(ObjectFromSetting):
+    """Класс для работы с E-Mail аккаунтами
+
+    See Also:
+        `Добавление учетной записи e-mail - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-email-account.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> email_accounts = EmailAccounts()
+        >>> email_accounts.get_all()
+        [TrObject('Новая учетная запись e-mail'), TrObject('QS')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(EmailAccounts, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_all(self, names=None):
+        """Возвращает список всех E-Mail аккаунтов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/scripts",
+            "EmailAccount",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class NetworkNodes(ObjectFromSetting):
+    """Класс для работы с сетевыми подключениями
+
+    See Also:
+        `Сеть - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-network-folder.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> network_nodes = NetworkNodes("client")
+        >>> network_nodes.get_enabled()
+        [TrObject('QuattroStationPro (172.20.0.101)'), TrObject('NSK-HD-01 (127.0.0.1)')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(NetworkNodes, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных сетевых подключений
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["should_be_connected"]
+            except KeyError:
+                return 0
 
         return self._get_objects_from_settings(
             "/{server_guid}/network",
             "NetworkNode",
-            network_names,
-            server_guids,
+            object_names=names,
+            server_guid=self.server_guid,
             sub_condition=sub_condition,
         )
 
-    def get_person_folders(self, person_folder_names=None, server_guids=None):
-        """Возвращает список папок персон
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных сетевых подключений
 
         Args:
-            person_folder_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                папок персон, разделенные запятыми или :obj:`list` -
-                список папок персон. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
-        folders = self._get_objects_from_settings(
-            "/{server_guid}/persons",
-            "PersonsSubFolder",
-            person_folder_names,
-            server_guids,
+
+        def sub_condition(sett):
+            try:
+                return 1 - sett["should_be_connected"]
+            except KeyError:
+                return 1
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/network",
+            "NetworkNode",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
         )
 
-        if not person_folder_names:
-            server_guid = BaseUtils.get_server_guid()
-            folders["persons"] = {
-                "obj": None,
-                "name": "persons",
-                "guid": "persons",
-                "type": "PersonsSubFolder",
-                "path": "/{}/persons".format(server_guid),
-                "server": server_guid,
-                "settings": self._host_api.settings("/{}/persons".format(server_guid)),
-            }
-
-        return folders
-
-    def get_persons(self, persons_folder_name=None, timeout=10):
-        """Возвращает список персон
+    def get_all(self, names=None):
+        """Возвращает список всех сетевых подключений
 
         Args:
-            persons_folder_name (:obj:`str` | :obj:`list`, optional): :obj:`str` -
-                названия папок персон, разделенные запятыми или :obj:`list` -
-                список папок персон. По умолчанию :obj:`None`
-            timeout (:obj:`int`, optional): Макс. время запроса к БД.
-                По умолчанию ``timeout=10``
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
 
         Returns:
-            :obj:`list`: Список персон - если персоны найдены
-            :obj:`str`: Текст ошибки - если возникла ошибка
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/network",
+            "NetworkNode",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
 
-        Raises:
-            PokaYokeError: Если не найден один из объектов
 
-        Examples:
-            >>> pk = PokaYoke()
-            >>> pk.get_persons()
+class PosTerminals(ObjectFromSetting):
+    """Класс для работы с POS Терминалами
+
+    See Also:
+        `Настройка POS-терминалов - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-pos-terminals-folder.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> pos_terminals = PosTerminals()
+        >>> pos_terminals.get_disabled()
+        [TrObject('Касса (1)')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(PosTerminals, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_enabled(self, names=None):
+        """Возвращает список активных POS Терминалов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return sett["pos_enable"]
+            except KeyError:
+                return 0
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/pos_folder2/terminals",
+            "PosTerminal",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_disabled(self, names=None):
+        """Возвращает список неактивных POS Терминалов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        def sub_condition(sett):
+            try:
+                return 1 - sett["pos_enable"]
+            except KeyError:
+                return 1
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/pos_folder2/terminals",
+            "PosTerminal",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+    def get_all(self, names=None):
+        """Возвращает список всех POS Терминалов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        return self._get_objects_from_settings(
+            "/{server_guid}/pos_folder2/terminals",
+            "PosTerminal",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Users(ObjectFromSetting):
+    """Класс для работы с пользователями и их группами.
+
+    See Also:
+        `Пользователи - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-users-folder.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> users = Users()
+        >>> users.get_groups()
+        [TrObject('TEST')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(Users, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_groups(self, names=None):
+        """Возвращает список групп пользователей
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/users",
+            "Group",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_users(self, names=None):
+        """Возвращает список пользователей
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/users",
+            "User",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_users_by_groups(self, group_names):
+        """Возвращает список пользователей из указанных групп
+
+        Args:
+            group_names (:obj:`str` | :obj:`list`): :obj:`str` - имена групп,
+                разделенные запятыми или :obj:`list` - список имен.
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        if group_names is None:
+            groups = [""]
+        else:
+            groups = [group.guid for group in self.get_groups(names=group_names)]
+
+        def sub_condition(sett):
+            return sett["group"] in groups
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/users",
+            "User",
+            object_names=None,
+            server_guid=self.server_guid,
+            sub_condition=sub_condition,
+        )
+
+
+class Persons(ObjectFromSetting):
+    """Класс для работы с персонами и их папками.
+
+    See Also:
+        `Персоны - Руководство пользователя Trassir
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-persons-folder.html>`_
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+            >>> persons = Persons()
+            >>> persons.get_folders()
+            [TrObject('Мошенники'), TrObject('DSSL'), TrObject('persons')]
+            >>> persons.get_persons()
             [
                 {
                     'name': 'Leonardo',
@@ -2482,425 +3010,233 @@ class PokaYoke(py_object):
                 },
                 ...
             ]
-        """
-        persons_folders = self.get_person_folders(
-            persons_folder_name, BaseUtils.get_server_guid()
-        )
+            >>> persons.get_person_by_guid("cJuJYAha")
+            {
+                'name': 'Leonardo',
+                'guid': 'cJuJYAha',
+                'gender': 0,
+                'birth_date': '1980-01-01',
+                'comment': 'Comment',
+                'contact_info': 'Contact info',
+                'folder_guid': 'n68LOBhG',
+                'image': <base64 image>,
+                'image_guid': 'gBHZ2vpz',
+                'effective_rights': 0,
+            }
+    """
 
-        return self._host_api.service_persons_get(
-            persons_folders.keys(), True, 0, 0, timeout
-        )
+    _PERSONS_UPDATE_TIMEOUT = 10 * 60  # Time in sec between update _persons dict
 
-    # def get_person_by_name(self, person_name, persons_folder_name=None, timeout=10):
-    #     """Get person info
-    #
-    #     Args:
-    #         person_name (str): Person name
-    #         persons_folder_name (str, optional): Person folder name; default: None
-    #         timeout (int, optional):  Max timeout to database query; default: 10 sec
-    #
-    #     Returns:
-    #         dict: If person found
-    #         list: If found more then one person
-    #         None: If person not found
-    #         str: If query error
-    #     """
-    #     if not person_name:
-    #         raise ValueError("No person name")
-    #
-    #     all_persons = self.get_persons(persons_folder_name, timeout)
-    #     if isinstance(all_persons, list):
-    #         persons = [
-    #             person for person in all_persons if person["name"] == person_name
-    #         ]
-    #         if not persons:
-    #             return None
-    #         elif len(persons) == 1:
-    #             return persons[0]
-    #         else:
-    #             return persons
-    #     else:
-    #         return all_persons
+    def __init__(self, server_guid=None):
+        super(Persons, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
 
-    def get_terminals(self, terminal_names=None, server_guids=None, only_enabled=True):
-        """Возвращает список POS терминалов
+        if isinstance(server_guid, str):
+            server_guid = [server_guid]
+
+        self.server_guid = server_guid
+
+        self._persons = None
+
+    def get_folders(self, names=None):
+        """Возвращает список папок персон
 
         Args:
-            terminal_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                pos терминалов, разделенные запятыми или :obj:`list` - список
-                pos терминалов. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-            only_enabled (:obj:`bool`, optional): Загружать только активные pos
-                терминалы. По умолчанию :obj:`True`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        sub_condition = None
-        if only_enabled:
-
-            def sub_condition(sett):
-                try:
-                    return sett["pos_enable"]
-                except KeyError:
-                    return 0
-
-        return self._get_objects_from_settings(
-            "/{server_guid}/pos_folder2/terminals",
-            "PosTerminal",
-            terminal_names,
-            server_guids,
-            sub_condition=sub_condition,
-        )
-
-    def get_users(self, user_names=None, server_guids=None):
-        """Возвращает список пользователей
-
-        Args:
-            user_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена
-                пользователей, разделенные запятыми или :obj:`list` - список
-                пользователей. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-
-        return self._get_objects_from_settings(
-            "/{server_guid}/users", "User", user_names, server_guids
-        )
-
-    def get_gpio_inputs(self, gpio_names=None, server_guids=None):
-        """Возвращает тревожные входы
-
-        Args:
-            gpio_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                тревожных входов, разделенные запятыми или :obj:`list` - список
-                тревожных входов. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "GPIO Input", object_names=gpio_names, server_guids=server_guids
-        )
-
-    def get_gpio_outputs(self, gpio_names=None, server_guids=None):
-        """Возвращает тревожные выходы
-
-        Args:
-            gpio_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                тревожных выходы, разделенные запятыми или :obj:`list` - список
-                тревожных выходы. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "GPIO Output", object_names=gpio_names, server_guids=server_guids
-        )
-
-    def get_access_points(self, access_point_names=None, server_guids=None):
-        """Возвращает считыватели Sigur
-
-        Args:
-            access_point_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                считывателей, разделенные запятыми или :obj:`list` - список
-                считывателей. По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "Access Point", object_names=access_point_names, server_guids=server_guids
-        )
-
-    def get_people_zones(self, zone_names=None, server_guids=None):
-        """Возвращает зоны людей
-
-        Args:
-            zone_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                зон, разделенные запятыми или :obj:`list` - список зон.
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
                 По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            List[:class:`TrObject`]: Список объектов
         """
-        return self._get_objects_from_list(
-            "PeopleZone", object_names=zone_names, server_guids=server_guids
-        )
+        try:
+            folders = self._get_objects_from_settings(
+                "/{server_guid}/_persons",
+                "PersonsSubFolder",
+                object_names=names,
+                server_guid=self.server_guid,
+            )
 
-    def get_simt_zones(self, zone_names=None, server_guids=None):
-        """Возвращает SIMT зоны
+            if names is None or "persons" in names:
+                for guid in self.server_guid:
+                    try:
+                        settings = self._host_api.settings("/{}/persons".format(guid))
+                    except KeyError:
+                        continue
+
+                    folders.append(TrObject(settings))
+
+        except self.ObjectsNotFoundError as err:
+            folders = []
+            names = self._objects_str_to_list(names)
+
+            if names is None or "persons" in names:
+                for guid in self.server_guid:
+                    try:
+                        settings = self._host_api.settings("/{}/persons".format(guid))
+                    except KeyError:
+                        continue
+
+                    folders.append(TrObject(settings))
+
+            if not folders:
+                raise err
+
+        return folders
+
+    def get_persons(self, folder_names=None, timeout=10):
+        """Возвращает список персон
+
+        Note:
+            Данный метод работает только с локальной БД.
 
         Args:
-            zone_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                SIMT зон, разделенные запятыми или :obj:`list` - список SIMT зон.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            folder_names (:obj:`str` | List[:obj:`str`], optional): :obj:`str` -
+                названия папок персон, разделенные запятыми или :obj:`list` -
+                список папок персон. По умолчанию :obj:`None`
+            timeout (:obj:`int`, optional): Макс. время запроса к БД.
+                По умолчанию ``timeout=10``
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
+            List[:obj:`dict`]: Список персон - если персоны найдены
 
         Raises:
-            PokaYokeError: Если не найден один из объектов
+            EnvironmentError: Если произошла ошибка при запросе в БД.
+            TrassirError: Если в данной сборке Trassir нет метода :obj:`host.service_persons_get`
         """
-        return self._get_objects_from_list(
-            "SIMT Zone", object_names=zone_names, server_guids=server_guids
-        )
+        tmp_server_guid = self.server_guid[:]
+        self.server_guid = [self.this_server_guid]
+        persons_folders = self.get_folders(names=folder_names)
+        self.server_guid = tmp_server_guid[:]
 
-    def get_head_borders(self, border_names=None, server_guids=None):
-        """Возвращает линии пересечения голов
+        try:
+            persons = self._host_api.service_persons_get(
+                [folder.guid for folder in persons_folders], True, 0, 0, timeout
+            )
+        except AttributeError:
+            raise TrassirError("Данный функционал не поддерживается вашей сборкой Trassir. "
+                               "Попробуйте обновить ПО.")
 
-        Args:
-            border_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                линий, разделенные запятыми или :obj:`list` - список линий.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+        if isinstance(persons, str):
+            raise EnvironmentError(persons)
 
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
+        return persons
 
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "HeadBorder", object_names=border_names, server_guids=server_guids
-        )
-
-    def get_people_borders(self, border_names=None, server_guids=None):
-        """Возвращает линии пересечения людей
-
-        Args:
-            border_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                линий, разделенные запятыми или :obj:`list` - список линий.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "PeopleBorder", object_names=border_names, server_guids=server_guids
-        )
-
-    def get_simt_borders(self, border_names=None, server_guids=None):
-        """Возвращает линии пересечения SIMT
-
-        Args:
-            border_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                линий, разделенные запятыми или :obj:`list` - список линий.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "SIMT Border", object_names=border_names, server_guids=server_guids
-        )
-
-    def get_deep_people_borders(self, border_names=None, server_guids=None):
-        """Возвращает линии пересечения deep_people
-
-        Args:
-            border_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                линий, разделенные запятыми или :obj:`list` - список линий.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        people_zones = self.get_people_zones(
-            zone_names=border_names, server_guids=server_guids
-        )
-
-        deep_people_borders = {
-            guid: data
-            for guid, data in people_zones.iteritems()
-            if self.get_zone_type(data.obj) == "Border"
+    def _update_persons_dict(self):
+        """Updating self._persons dict"""
+        persons = self.get_persons()
+        self._persons = {
+            "update_ts": int(time.time()),
+            "by_guid": {person["guid"]: person for person in persons},
         }
 
-        return deep_people_borders
+    def _check_loaded_persons(self):
+        """This method check if self._persons dict is need to be updated"""
+        ts_now = int(time.time())
 
-    def get_all_borders(self, border_names=None, server_guids=None):
-        """Возвращает все линии пересечения
+        if (
+            self._persons is None
+            or (ts_now - self._persons["update_ts"]) > self._PERSONS_UPDATE_TIMEOUT
+        ):
+            self._update_persons_dict()
 
-        :func:`~script_framework.PokaYoke.get_head_borders` +
-        :func:`~script_framework.PokaYoke.get_people_borders` +
-        :func:`~script_framework.PokaYoke.get_simt_borders` +
-        :func:`~script_framework.PokaYoke.get_deep_people_borders`
+    def get_person_by_guid(self, person_guid):
+        """Возвращает информацию о персоне по его guid
+
+        Note:
+            Для уменьшения кол-ва запросов к БД - метод создает локальную
+            копию всех персон при первом запросе и обновляет ее вместе
+            с последующими запросами не чаще чем 1 раз в 10 минут.
 
         Args:
-            border_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                линий, разделенные запятыми или :obj:`list` - список линий.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            person_guid (:obj:`str`): Guid персоны
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
+            :obj:`dict`: Даные о персоне или :obj:`None` если персона не найдена
         """
-        objects = self.get_people_borders(border_names, server_guids)
-        objects.update(self.get_head_borders(border_names, server_guids))
-        objects.update(self.get_simt_borders(border_names, server_guids))
-        objects.update(self.get_deep_people_borders(border_names, server_guids))
+        self._check_loaded_persons()
+        return self._persons["by_guid"].get(person_guid)
+
+
+class ObjectFromList(BasicObject):
+    """"""
+
+    def __init__(self):
+        super(ObjectFromList, self).__init__()
+
+    def _load_objects_from_list(self, obj_type, sub_condition=None):
+        """Load objects from Trassir objects_list method
+
+        Args:
+            obj_type (str | list): Loading object type; example: "EmailAccount"
+            sub_condition (function, optional): Function with SE_Settings as argument to filter objects
+
+        Returns:
+            list: TrObject objects list
+                Example [TrObject(...), TrObject(...), ...]
+        """
+        if sub_condition is None:
+            sub_condition = BaseUtils.do_nothing
+
+        objects = []
+        for obj in self._host_api.objects_list(obj_type):
+            if sub_condition(obj):
+                objects.append(TrObject(obj))
 
         return objects
 
-    def get_workplaces(self, zone_names=None, server_guids=None):
-        """Возвращает список рабочих зон
+    def _get_objects_from_list(
+        self,
+        object_type,
+        object_names=None,
+        server_guid=None,
+        ban_empty_result=False,
+        sub_condition=None,
+    ):
+        """Check if objects exists and returns list from _load_objects_from_settings
+
+        Note:
+             If object_names is not None - checking if all object names are unique
 
         Args:
-            zone_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                зон, разделенные запятыми или :obj:`list` - список зон.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+            object_type (str|list): Loading object type; example: "EmailAccount"
+            object_names (str|list, optional): Comma spaced string or list of object names; default: None
+            server_guid (str|list, optional): Server guids; default: None
+            ban_empty_result (bool, optional): If True - raise ObjectsNotFoundError if no one object found
+            sub_condition (func, optional) : Function with SE_Settings as argument to filter objects
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
+            list: Trassir list from _load_objects_from_settings
 
         Raises:
-            PokaYokeError: Если не найден один из объектов
+            ObjectsNotFoundError: If can't find channel
         """
-        people_zones = self.get_people_zones(
-            zone_names=zone_names, server_guids=server_guids
-        )
+        if object_names == "":
+            raise ParameterError("'{}' не выбраны".format(object_type))
 
-        workplaces = {
-            guid: data
-            for guid, data in people_zones.iteritems()
-            if self.get_zone_type(data.obj) in ["Workplace", "Рабочее место"]
-        }
+        if server_guid is None:
+            server_guid = self.this_server_guid
+        else:
+            if isinstance(server_guid, str):
+                server_guid = [server_guid]
 
-        return workplaces
+        objects = self._load_objects_from_list(object_type, sub_condition)
 
-    def get_queues(self, zone_names=None, server_guids=None):
-        """Возвращает список зон очередей
+        objects = [obj for obj in objects if obj.server in server_guid]
 
-        Args:
-            zone_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                зон, разделенные запятыми или :obj:`list` - список зон.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
+        if ban_empty_result and not objects:
+            raise self.ObjectsNotFoundError(
+                "Не найдено ниодного объекта '{}'".format(object_type)
+            )
 
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
+        if object_names is None:
+            return objects
 
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        people_zones = self.get_people_zones(
-            zone_names=zone_names, server_guids=server_guids
-        )
+        else:
+            return self._filter_objects_by_name(objects, object_names)
 
-        queues = {
-            guid: data
-            for guid, data in people_zones.iteritems()
-            if self.get_zone_type(data.obj) in ["", "Queue", "Очередь"]
-        }
-
-        return queues
-
-    def get_shelves(self, zone_names=None, server_guids=None):
-        """Возвращает список зон полок
-
-        Args:
-            zone_names (:obj:`str` | :obj:`list`, optional): :obj:`str` - названия
-                зон, разделенные запятыми или :obj:`list` - список зон.
-                По умолчанию :obj:`None`
-            server_guids (:obj:`str` | :obj:`list`, optional): Guid сервера :obj:`str` или
-                спиоск серверов :obj:`list`, если необходимо загрузить объекты
-                только с определенных серверов. По умолчанию :obj:`None`
-
-        Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
-
-        Raises:
-            PokaYokeError: Если не найден один из объектов
-        """
-        return self._get_objects_from_list(
-            "Shelf", object_names=zone_names, server_guids=server_guids
-        )
-
-    def get_zone_type(self, zone_obj):
+    def _zone_type(self, zone_obj):
         """Возвращает тип зоны для объекта
 
         Args:
@@ -2961,50 +3297,453 @@ class PokaYoke(py_object):
         except KeyError:
             "not a deep people queue"
 
-    def check_email_account(self, account_name):
+
+class GPIO(ObjectFromList):
+    """Класс для работы с тревожными входами/выходами
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> gpio = GPIO()
+        >>> gpio_door = gpio.get_inputs("Door")[0]
+        >>> gpio_door.obj.state("gpio_input_level")
+        'Input Low (Normal High)'
+        >>> gpio_light = gpio.get_outputs("Light")[0]
+        >>> gpio_light.obj.set_output_high()
+    """
+
+    def __init__(self, server_guid=None):
+        super(GPIO, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_inputs(self, names=None):
+        """Возвращает список тревожных входов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "GPIO Input",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_outputs(self, names=None):
+        """Возвращает список тревожных выходов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "GPIO Output",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Zones(ObjectFromList):
+    """Класс для работы с зонами
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> zones = Zones()
+        >>> zones.get_queues("Касса 1")[0].obj.state("zone_queue")
+        '5+'
+    """
+
+    def __init__(self, server_guid=None):
+        super(Zones, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_people(self, names=None):
+        """Возвращает список PeopleZones
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "PeopleZone",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_simt(self, names=None):
+        """Возвращает список зон SIMT
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "SIMT Zone",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_workplaces(self, names=None):
+        """Возвращает список рабочих зон
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        people_zones = self.get_people(names=names)
+
+        return [
+            zone
+            for zone in people_zones
+            if self._zone_type(zone.obj) in ["Workplace", "Рабочее место"]
+        ]
+
+    def get_queues(self, names=None):
+        """Возвращает список зон очередей
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        people_zones = self.get_people(names=names)
+
+        return [
+            zone
+            for zone in people_zones
+            if self._zone_type(zone.obj) in ["", "Queue", "Очередь"]
+        ]
+
+    def get_shelves(self, names=None):
+        """Возвращает список зон полок
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "Shelf",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class Borders(ObjectFromList):
+    """Класс для работы с линиями пересечения
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> borders = Borders()
+        >>> borders.get_simt()
+        [TrObject('DBOP')]
+        >>> borders.get_all()
+        [TrObject('Вход в офис'), TrObject('DBOP')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(Borders, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_head(self, names=None):
+        """Возвращает список HeadBorders
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "HeadBorder",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_people(self, names=None):
+        """Возвращает список PeopleBorders
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "PeopleBorder",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_simt(self, names=None):
+        """Возвращает список SIMT Borders
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "SIMT Border",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+    def get_deep_people(self, names=None):
+        """Возвращает список DeepPeopleBorders
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        people_zones = self._get_objects_from_list(
+            "PeopleZone",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+        return [zone for zone in people_zones if self._zone_type(zone.obj) == "Border"]
+
+    def get_all(self, names=None):
+        """Возвращает список всех линий пересечения
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+        all_borders = (
+            self.get_head()
+            + self.get_people()
+            + self.get_simt()
+            + self.get_deep_people()
+        )
+
+        if names is None:
+            return all_borders
+        else:
+            return self._filter_objects_by_name(all_borders, names)
+
+
+class Sigur(ObjectFromList):
+    """Класс для работы со СКУД Sigur
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+    """
+
+    def __init__(self, server_guid=None):
+        super(Sigur, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_access_points(self, names=None):
+        """Возвращает список точек доступа
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_list(
+            "Access Point",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
+        )
+
+
+class TrassirError(ScriptError):
+    """Exception if bad trassir version"""
+
+    pass
+
+
+class PokaYoke(py_object):
+    """Класс для защиты от дурака
+
+    Позволяет блокировать запуск скрипта на ПО, где это
+    не предусмотрено (например, на клиенте или TOS).
+    А также производить некоторые другие проверки.
+    """
+
+    _EMAIL_REGEXP = re.compile(
+        r"[^@]+@[^@]+\.[^@]+"
+    )  # Default regex to check emails list
+    _PHONE_REGEXP = re.compile(r"[^\d,;]")  # Default regex to check phone list
+
+    _host_api = host
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def ban_tos():
+        """Блокирует запуск скрипта на `Trassir OS`
+
+        Raises:
+            OSError: Если скрипт запускается на `Trassir OS`
+
+        Examples:
+            >>> PokaYoke.ban_tos()
+            OSError: Скрипт недоступен для TrassirOS
+        """
+        if os.name != "nt":
+            raise OSError("Скрипт недоступен для TrassirOS")
+
+    @staticmethod
+    def ban_win():
+        """Блокирует запуск скрипта на `Windows OS`
+
+        Raises:
+            OSError: Если скрипт запускается на `Windows OS`
+
+        Examples:
+            >>> PokaYoke.ban_win()
+            OSError: Скрипт недоступен для WindowsOS
+        """
+        if os.name == "nt":
+            raise OSError("Скрипт недоступен для WindowsOS")
+
+    @staticmethod
+    def ban_client():
+        """Блокирует запуск скрипта на `Trassir Client`
+
+        Raises:
+            TrassirError: Если скрипт запускается на `Trassir Client`
+
+        Examples:
+            >>> PokaYoke.ban_client()
+            TrassirError: Скрипт недоступен для клиентской версии Trassir
+        """
+        if BaseUtils.get_server_guid() == "client":
+            raise TrassirError("Скрипт недоступен для клиентской версии Trassir")
+
+    @classmethod
+    def ban_daemon(cls):
+        """Блокирует запуск скрипта на сервре Trassir, который запущен как служба
+
+        Raises:
+            TrassirError: Если скрипт запускается на сервре Trassir,
+                который запущен как служба
+
+        Examples:
+            >>> PokaYoke.ban_daemon()
+            TrassirError: Скрипт недоступен для Trassir запущенным как служба
+        """
+        if cls._host_api.settings("system_wide_options")["daemon"]:
+            raise TrassirError("Скрипт недоступен для Trassir запущенным как служба")
+
+    @staticmethod
+    def check_email_account(account_name):
         """Проверяет существование E-Mail аккаунта
 
         Args:
             account_name (:obj:`str`): Имя E-Mail аккаунта
 
         Returns:
-             Dict[:obj:`str`, :class:`~script_framework.PokaYokeObject`]: Словарь
-             объектов, вида ``{"guid": PokaYokeObject}``
+             List[:class:`TrObject`]: Список объектов
 
         Raises:
-            PokaYokeError: Если аккаунт не найден
+            ParameterError: Если аккаунт не выбран
+            ObjectsNotFoundError: Если аккаунт не найден
 
         Examples:
-            >>> pk = PokaYoke()
-            >>> pk.check_email_account("")
-            PokaYokeError: 'EmailAccount' not selected
-
-            >>> pk.check_email_account("QSs")
-            PokaYokeError: Can't find EmailAccount: QSs
-
-            >>> pk.check_email_account("QS")
-            {
-                'IIKGNS2p': PokaYokeObject({
-                    'obj': None,
-                    'obj_methods': [],
-                    'name': 'QS',
-                    'guid': 'IIKGNS2p',
-                    'full_guid': 'IIKGNS2p_pV4ggECb',
-                    'type': 'EmailAccount',
-                    'path': '/pV4ggECb/scripts/IIKGNS2p',
-                    'parent': None
-                    'server': 'pV4ggECb',
-                    'settings': settings('/pV4ggECb/scripts/IIKGNS2p'),
-                })
-            }
-
+            >>> PokaYoke.check_email_account("")
+            ParameterError: 'EmailAccount' не выбраны
+            >>> PokaYoke.check_email_account("QSs")
+            ObjectsNotFoundError: Не найдены объекты EmailAccount: QSs
+            >>> PokaYoke.check_email_account("QS")
+            [TrObject('QS')]
         """
+        e_accounts = EmailAccounts(BaseUtils.get_server_guid())
+        return e_accounts.get_all(account_name)
 
-        return self._get_objects_from_settings(
-            "scripts", "EmailAccount", object_names=account_name, ban_empty_result=True
-        )
-
-    def parse_emails(self, mailing_list, regex=None):
+    @classmethod
+    def parse_emails(cls, mailing_list, regex=None):
         """Парсит email дреса из строки
 
         Каждый email проверяется с помощью regex ``r"[^@]+@[^@]+\.[^@]+"``.
@@ -3018,12 +3757,12 @@ class PokaYoke(py_object):
             List[:obj:`str`]: Список адресов
 
         Raises:
-            PokaYokeError: Если найден невалидный email
+            ParameterError: Если найден невалидный email
 
         Examples:
             >>> pk = PokaYoke()
             >>> pk.parse_emails("a.trubilil!dssl.ru,support@dssl.ru")
-            PokaYokeError: Email 'a.trubilil!dssl.ru' is not valid!
+            ParameterError: Email 'a.trubilil!dssl.ru' is not valid!
             >>>
             >>> pk.parse_emails("a.trubilil@dssl.ru,support@dssl.ru")
             ['a.trubilil@dssl.ru', 'support@dssl.ru']
@@ -3031,12 +3770,12 @@ class PokaYoke(py_object):
         mailing_list = mailing_list.replace(" ", "")
 
         if not mailing_list:
-            raise PokaYokeError("No emails to send!")
+            raise ParameterError("No emails to send!")
 
         if regex is None:
-            regex = self._EMAIL_REGEXP
+            regex = cls._EMAIL_REGEXP
         else:
-            if not isinstance(regex, self._EMAIL_REGEXP.__class__):
+            if not isinstance(regex, cls._EMAIL_REGEXP.__class__):
                 raise TypeError(
                     "Expected re.compile, got '{}'".format(type(regex).__name__)
                 )
@@ -3048,11 +3787,12 @@ class PokaYoke(py_object):
 
         for mail in mailing_list:
             if not regex.match(mail):
-                raise PokaYokeError("Email '{}' is not valid!".format(mail))
+                raise ParameterError("Email '{}' is not valid!".format(mail))
 
         return mailing_list
 
-    def check_phones(self, phones, regex=None):
+    @classmethod
+    def check_phones(cls, phones, regex=None):
         """Проверяет строку на валидность телефонных номеров
 
         Строка проверяется с помощью regex ``r"[^\d,;]"``.
@@ -3066,12 +3806,12 @@ class PokaYoke(py_object):
             :obj:`str`: Список номеров телефона
 
         Raises:
-            PokaYokeError: Если найден невалидный номер телефона
+            ParameterError: Если найден невалидный номер телефона
 
         Examples:
             >>> pk = PokaYoke()
             >>> pk.check_phones("79999999999,78888888888A")
-            PokaYokeError: Bad chars in phone list: `A`
+            ParameterError: Bad chars in phone list: `A`
             >>>
             >>> pk.check_phones("a.trubilil@dssl.ru,support@dssl.ru")
             '79999999999,78888888888'
@@ -3079,18 +3819,18 @@ class PokaYoke(py_object):
         phones = phones.replace(" ", "")
 
         if not phones:
-            raise PokaYokeError("No phones!")
+            raise ParameterError("No phones!")
 
         if regex is None:
-            regex = self._PHONE_REGEXP
+            regex = cls._PHONE_REGEXP
         else:
-            if not isinstance(regex, self._PHONE_REGEXP.__class__):
+            if not isinstance(regex, cls._PHONE_REGEXP.__class__):
                 raise TypeError(
                     "Expected re.compile, got '{}'".format(type(regex).__name__)
                 )
         bad_chars = regex.findall(phones)
         if bad_chars:
-            raise PokaYokeError(
+            raise ParameterError(
                 "Bad chars in phone list: `{}`".format(", ".join(bad_chars))
             )
 
@@ -3169,12 +3909,13 @@ class PopupSender(Sender):
 
     Examples:
         >>> sender = PopupSender(300)
+        >>> sender.text("Hello World!")
 
-        >>> # Показать сообщение
-        >>> sender.text("Сообщение")
+            .. image:: images/popup_sender.text.png
 
-        >>> # Показать изображение
         >>> sender.image(r"manual\en\cloud-devices-16.png")
+
+            .. image:: images/popup_sender.image.png
     """
 
     def __init__(self, width=400):
@@ -3236,13 +3977,14 @@ class PopupWithBtnSender(Sender):
             По умолчанию :obj:`width=800`
 
     Examples:
-        >>> sender = PopupSender(300)
+        >>> sender = PopupWithBtnSender()
+        >>> sender.text("Hello World!")
 
-        >>> # Показать сообщение
-        >>> sender.text("Сообщение")
+            .. image:: images/popup_with_btn_sender.text.png
 
-        >>> # Показать изображение
         >>> sender.image(r"manual\en\cloud-devices-16.png")
+
+            .. image:: images/popup_with_btn_sender.image.png
     """
 
     def __init__(self, width=800):
@@ -3292,38 +4034,39 @@ class EmailSender(Sender):
 
     Args:
         account (:obj:`str`): E-Mail аккаунт trassir. Проверяется
-            методом :func:`~script_framework.PokaYoke.check_email_account`
+            методом :meth:`PokaYoke.check_email_account`
         mailing_list (:obj:`str`): Список email адресов для отправки писем
             разделенный запятыми. Проверяется и парсится в список методом
-            :func:`~script_framework.PokaYoke.parse_emails`
+            :meth:`PokaYoke.parse_emails`
         subject (:obj:`str`, optional): Общая тема для сообщений.
             По умолчанию :obj:`None`
         max_size (:obj:`int`, optional): Максимальный размер вложения, байт.
             По умолчанию 25 * 1024 * 1024
 
     Examples:
-        >>> sender = EmailSender("QS", "a.trubilin@dssl.ru")
+        >>> sender = EmailSender("QS", "my_mail@google.com")
+        >>> sender.text("Hello World!")
 
-        >>> # Отправить сообщение
-        >>> sender.text("Сообщение")
+            .. image:: images/email_sender.text.png
 
-        >>> # Отправить изображение
         >>> sender.image(r"manual\en\cloud-devices-16.png")
 
-        >>> # Отправить файлы
+            .. image:: images/email_sender.image.png
+
         >>> sender.files([r"manual\en\cloud.html", r"manual\en\cloud.png"])
+
+            .. image:: images/email_sender.files.png
     """
 
     def __init__(self, account, mailing_list, subject=None, max_size=None):
         super(EmailSender, self).__init__()
 
-        pk = PokaYoke()
-        pk.check_email_account(account)
+        PokaYoke.check_email_account(account)
 
         self.max_size = max_size or 25 * 1024 * 1024
 
         self._account = account
-        self._mailing_list = pk.parse_emails(mailing_list)
+        self._mailing_list = PokaYoke.parse_emails(mailing_list)
 
         self._subject_default = subject or self._generate_subject()
 
@@ -3422,25 +4165,26 @@ class EmailSender(Sender):
 class TelegramSender(Sender):
     """Работа с телеграм ботом `@trassirbot <https://t.me/trassirbot>`_
 
-    Important:
-        | Для использования TelegramSender скрипт должен
-          быть запущен на **сервере** Trassir.
-        | На Клиенте скрипт вызовет ошибку :obj:`ServerKeyError`
+    Warnings:
+        | Cкрипт должен быть запущен на **сервере** Trassir.
+        | На Клиенте скрипт вызовет ошибку ``ServerKeyError``
 
     Args:
         telegram_ids (:obj:`str`): Id пользователей, через запятую.
 
     Examples:
         >>> sender = TelegramSender("123456789")
+        >>> sender.text("Hello World!")
 
-        >>> # Отправить сообщение
-        >>> sender.text("Сообщение")
+            .. image:: images/telegram_sender.text.png
 
-        >>> # Отправить изображение
         >>> sender.image(r"manual\en\cloud-devices-16.png")
 
-        >>> # Отправить файлы
+            .. image:: images/telegram_sender.image.png
+
         >>> sender.files([r"manual\en\cloud.html", r"manual\en\cloud.png"])
+
+            .. image:: images/telegram_sender.files.png
     """
 
     def __init__(self, telegram_ids):
@@ -3510,25 +4254,39 @@ class SMSCSender(Sender):
 
     Note:
         | Номера проверяются методом
-          :func:`~script_framework.PokaYoke.check_phones`
+          :meth:`PokaYoke.check_phones`
         | Также при первом запуске скрипт проверяет данные авторизации
 
+    Warnings:
+        | По умолчанию сервис smsc.ru отправляет сообщения от своего имени *SMSC.RU.*
+          При этом отправка на номера Мегафон/Йота **недоступна** т.к. имя *SMSC.RU*
+          заблокировано оператором.
+        |
+        | Мы настоятельно **НЕ** рекомендуем использовать стандартное имя *SMSC.RU.*
+        |
+        | Для отправки смс от вашего буквенного имени необходимо его
+          создать в разделе - https://smsc.ru/senders/ и зарегистрировать для
+          операторов в колонке Действия по кнопке Изменить (после заключения договора
+          согласно инструкции - https://smsc.ru/contract/info/ ) а также приложить
+          гарантийное письмо на МТС в личный кабинет http://smsc.ru/documents/ и
+          отправить на почту inna@smsc.ru
+
     Args:
-        login (:obj:`str`): SMSC Логин или MD5 хеш
+        login (:obj:`str`): SMSC Логин
         password (:obj:`str`): SMSC Пароль
         phones (:obj:`str`): Список номеров для отправки смс резделенный
             запятыми или точкой с запятой
-        translit(:obj:`1` | :obj:`0`, optional): Переводить сообщение в
-            транслит. По умолчанию :obj:`1`
+        translit(:obj:`bool`, optional): Переводить сообщение в
+            транслит. По умолчанию :obj:`True`
 
     Raises:
         SMSCSenderError: При любых ошибках с отправкой сообщения
 
     Examples:
-        >>> sender = TelegramSender("login", "password", "79999999999")
+        >>> sender = SMSCSender("login", "password", "79999999999")
+        >>> sender.text("Hello World!")
 
-        >>> # Отправить сообщение
-        >>> sender.text("Сообщение")
+            .. image:: images/smsc_sender.text.png
     """
 
     _BASE_URL = "https://smsc.ru/sys/send.php?{params}"
@@ -3544,22 +4302,21 @@ class SMSCSender(Sender):
         9: "Too many requests",
     }
 
-    def __init__(self, login, password, phones, translit=1):
+    def __init__(self, login, password, phones, translit=True):
         super(SMSCSender, self).__init__()
         if not login:
             raise SMSCSenderError("Empty login")
         if not password:
             raise SMSCSenderError("Empty password")
-        pk = PokaYoke()
 
         self._params = {
             "login": urllib.quote(login),  # Login
             "psw": urllib.quote(password),  # Password or MD5 hash
             "phones": urllib.quote(
-                pk.check_phones(phones)
+                PokaYoke.check_phones(phones)
             ),  # Comma or semicolon spaced phone list
             "fmt": 3,  # Response format: 0 - string; 1 - integers; 2 - xml; 3 - json
-            "translit": translit,  # If 1 - transliting message
+            "translit": 1 if translit else 0,  # If 1 - transliting message
             "charset": "utf-8",  # Message charset: "windows-1251"|"utf-8"|"koi8-r"
             "cost": 3,  # Message cost in response: 0 - msg; 1 - cost; 2 - msg+cost, 3 - msg+cost+balance
         }
@@ -3605,6 +4362,207 @@ class SMSCSender(Sender):
             text (:obj:`str`): Текст сообщения.
         """
 
-        url = self._get_link(mes=urllib.quote(text))
+        url = self._get_link(mes=text)
 
         self._host_api.async_get(url, self._request_callback)
+
+
+class FtpUploadTracker:
+    """Upload progress class"""
+
+    size_written = 0.0
+    last_shown_percent = 0
+
+    def __init__(self, file_path, callback, host_api=host):
+        self._host_api = host_api
+        self.total_size = os.path.getsize(BaseUtils.win_encode_path(file_path))
+        self.file_path = file_path
+        self.callback = callback
+        self.logger = BaseUtils.get_logger(
+            host_log=None, popup_log=None, file_log="DEBUG"
+        )
+
+    def handle(self, block):
+        """Handler for storbinary
+
+        See Also:
+            https://docs.python.org/2/library/ftplib.html#ftplib.FTP.storbinary
+        """
+        self.size_written += 1024.0
+        percent_complete = round((self.size_written / self.total_size) * 100)
+
+        if self.last_shown_percent != percent_complete:
+            self.last_shown_percent = percent_complete
+            self._host_api.timeout(
+                100, lambda: self.callback(self.file_path, int(percent_complete), "")
+            )
+
+
+class FTPSender(Sender):
+    """Класс для отправки файлов на ftp сервер
+
+    При инициализации проверят подключение к ftp серверу. Файлы отправляет
+    по очереди. Максимальный размер очереди можно изменить. Во время
+    выполнения передает текущий прогресс отправки файла в callback функцию.
+
+    Args:
+        host (:obj:`str`): Адрес ftp сервера.
+        port (:obj:`int`, optional): Порт ftp сервера. По умолчанию :obj:`port=21`
+        user (:obj:`str`, optional): Имя пользователя. По умолчанию :obj:`"anonymous"`
+        passwd (:obj:`str`, optional): Пароль пользователя. По умолчанию :obj:`passwd=""`
+        work_dir (:obj:`str`, optional): Директория на сервре для сохранения файлов.
+            По умолчанию :obj:`None`
+        callback (:obj:`function`, optional): Callable function. По умолчанию :obj:`None`
+        queue_maxlen (:obj:`int`, optional): Максимальная длина очереди на отправку.
+            По умолчанию :obj:`queue_maxlen=1000`
+
+    Examples:
+        >>> def callback(file_path, progress, error):
+        >>>     # Пример callback функции, которая отображает
+        >>>     # текущий прогресс в счетчике запуска скрипта
+        >>>     # Args:
+        >>>     #   file_path (str): Путь до файла
+        >>>     #   progress (int): Текущий прогресс передачи файла, %
+        >>>     #   error (str | Exception): Ошибка при отправке файла, если есть
+        >>>     host.stats()["run_count"] = progress
+        >>>     if error:
+        >>>         host.error(error)
+        >>>
+        >>>     if progress == 100:
+        >>>         host.timeout(3000, lambda: os.remove(BaseUtils.win_encode_path(file_path)))
+        >>>
+        >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", dir="/test_dir/", callback=callback)
+        >>> sender.files(r"D:\Shots\export_video.avi")
+    """
+
+    def __init__(
+        self,
+        host,
+        port=21,
+        user="anonymous",
+        passwd="",
+        work_dir=None,
+        callback=None,
+        queue_maxlen=1000,
+    ):
+        super(FTPSender, self).__init__()
+        self._host = host
+        self._port = port
+        self._user = user
+        self._passwd = passwd
+        self._work_dir = work_dir
+
+        self._queue = deque(maxlen=queue_maxlen)
+
+        self._ftp = None
+
+        if callback is None:
+            callback = BaseUtils.do_nothing
+
+        self.callback = callback
+
+        self._check_connection()
+
+    def _check_connection(self):
+        """Check if it possible to connect"""
+        ftp = ftplib.FTP()
+        ftp.connect(self._host, self._port, timeout=10)
+        ftp.login(self._user, self._passwd)
+        if self._work_dir:
+            try:
+                ftp.cwd(self._work_dir)
+            except ftplib.error_perm:
+                ftp.mkd(self._work_dir)
+                ftp.cwd(self._work_dir)
+
+        ftp.quit()
+
+    def _get_connection(self):
+        """Connecting to ftp
+
+        Returns:
+            ftplib.FTP: Ftp object
+        """
+        try:
+            ftp = ftplib.FTP()
+            ftp.connect(self._host, self._port, timeout=10)
+            ftp.login(self._user, self._passwd)
+            try:
+                ftp.cwd(self._work_dir)
+            except ftplib.error_perm:
+                ftp.mkd(self._work_dir)
+                ftp.cwd(self._work_dir)
+            ftp.encoding = "utf-8"
+            return ftp
+        except ftplib.all_errors:
+            return
+
+    def _close_connection(self):
+        """Close ftp connection"""
+        try:
+            if self._ftp is not None:
+                self._ftp.close()
+        finally:
+            self._ftp = None
+
+    def _send_file(self, file_path):
+        """Storbinary file with self.ftp
+
+        Args:
+            file_path (str): Full file path
+        """
+        file_name = os.path.basename(file_path)
+        upload_tracker = FtpUploadTracker(file_path, self.callback)
+        with open(BaseUtils.win_encode_path(file_path), "rb") as opened_file:
+            self._ftp.storbinary(
+                "STOR " + file_name, opened_file, 1024, upload_tracker.handle
+            )
+
+    @BaseUtils.run_as_thread_v2()
+    def _sender(self):
+        """Send files in queue"""
+        if self._queue:
+            if self._ftp is None:
+                self._ftp = self._get_connection()
+
+            if self._ftp:
+                file_path = self._queue.popleft()
+                if BaseUtils.is_file_exists(BaseUtils.win_encode_path(file_path)):
+                    try:
+                        self._send_file(file_path)
+
+                    except ftplib.all_errors as err:
+                        self._host_api.timeout(
+                            100, lambda: self.callback(file_path, -2, error=err)
+                        )
+                        self._queue.append(file_path)
+                        self._close_connection()
+
+                    except Exception as err:
+                        self._host_api.timeout(
+                            100, lambda: self.callback(file_path, -3, error=err)
+                        )
+
+                else:
+                    self._host_api.timeout(
+                        100,
+                        lambda: self.callback(file_path, -1, error="File not found"),
+                    )
+
+            self._host_api.timeout(500, self._sender)
+        else:
+            self._close_connection()
+
+    def files(self, file_paths, *args):
+        """Отправка файлов
+
+        Args:
+            file_paths (:obj:`str` | :obj:`list`): Путь до файла или список
+                файлов для отправки
+        """
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]
+
+        self._queue.extend(file_paths)
+        if not self._ftp:
+            self._sender()

@@ -9,29 +9,25 @@ win_encode_path
 ---------------
 .. automethod:: trassir_script_framework.BaseUtils.win_encode_path
 
-check_file
-----------
-.. automethod:: trassir_script_framework.BaseUtils.check_file
+is_file_exists
+--------------
+.. automethod:: trassir_script_framework.BaseUtils.is_file_exists
 
-check_folder
-------------
-.. automethod:: trassir_script_framework.BaseUtils.check_folder
+is_folder_exists
+----------------
+.. automethod:: trassir_script_framework.BaseUtils.is_folder_exists
 
 cat
 ---
 .. automethod:: trassir_script_framework.BaseUtils.cat
 
-pretty_json
------------
-.. automethod:: trassir_script_framework.BaseUtils.pretty_json
+to_json
+-------
+.. automethod:: trassir_script_framework.BaseUtils.to_json
 
-get_object
-----------
-.. automethod:: trassir_script_framework.BaseUtils.get_object
-
-get_object_name_by_guid
------------------------
-.. automethod:: trassir_script_framework.BaseUtils.get_object_name_by_guid
+lpr_flags_decode
+----------------
+.. automethod:: trassir_script_framework.BaseUtils.lpr_flags_decode
 
 get_operator_gui
 ----------------

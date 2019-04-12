@@ -6,10 +6,14 @@
 Trassir Script Framework's documentation!
 ====================================================
 | *Фреймворк для скриптов автоматизации Trassir.*
-| *Для использования фреймворка скопируйте весь исходный код в свой скрипт*
+| *Для использования фреймворка скопируйте* `исходный код
+  <https://github.com/AATrubilin/trassir_script_framework/blob/master/trassir_script_framework.py>`_
+  *в свой скрипт*
 
-`Подробная информация о скриптах доступна в
-документации <https://www.dssl.ru/files/trassir/manual/ru/setup-script-feature.html>`_
+| Примеры использования фреймворка доступны по `ссылке
+  <https://github.com/AATrubilin/trassir_script_framework/tree/master/examples>`_
+| Дополнительная информация о скриптах доступна в `документации
+  <https://www.dssl.ru/files/trassir/manual/ru/setup-script-feature.html>`_
 
 .. toctree::
 

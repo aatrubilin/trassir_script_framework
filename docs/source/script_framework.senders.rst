@@ -25,3 +25,8 @@ SMSCSender
 ----------
 .. autoclass:: trassir_script_framework.SMSCSender
     :members:
+
+FTPSender
+---------
+.. autoclass:: trassir_script_framework.FTPSender
+    :members:
