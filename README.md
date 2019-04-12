@@ -1,3 +1,4 @@
+[<img src="https://www.dssl.ru/upload/aspro.optimus/69d/logo.svg" height="20">](https://www.dssl.ru/)
 [![Documentation Status](https://readthedocs.org/projects/trassir-script-framework/badge/?version=latest)](https://trassir-script-framework.readthedocs.io/ru/latest/?badge=latest)
 
 # trassir_script_framework
@@ -16,7 +17,7 @@
 Скопируйте в редактор содержимое файла 
 [trassir_script_framework.py](trassir_script_framework.py)
 
-Измените автора ``AATrubilin`` и имя скрипта ``trassir_script_framework`` и версию ``0.1b``
+Измените автора ``AATrubilin``, имя скрипта ``trassir_script_framework`` и версию ``0.2b``
 
 ```python
 # -*- coding: utf-8 -*-
@@ -24,7 +25,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.1b</version>
+    <version>0.2b</version>
 </parameters>
 """
 ```
@@ -39,12 +40,14 @@
 ```
 
 ```python
->>> # Создание/поиск шаблона с именем "New template"
->>> template = Template("New template")
+>>> # Поиск объекта канала "AC-D2141IR3 Склад"
+>>> channels = Channels()
+>>> my_channel = channels.get_enabled("AC-D2141IR3 Склад")[0]
 >>>
->>> # Добавление минибраузера со вкладкой google.com
->>> template.content = "minibrowser(0,htmltab(,https://www.google.com/))"
->>> template.show(1)
+>>> # Сохранение скриншота
+>>> shot_saver = ShotSaver()
+>>> shot_saver.shot(my_channel.full_guid)
+'D:/DSSL/Trassir-4.1-Client/shots\AC-D2141IR3 Склад (2019.04.12 15-24-34).jpg'
 ```
 
 Больше примеров и информации:
