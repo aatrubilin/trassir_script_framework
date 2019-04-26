@@ -4,7 +4,7 @@ Changelog
 
 Version 0.3
 ===========
-*Released future*
+*Released 2019-04-26*
 
 New Features
 

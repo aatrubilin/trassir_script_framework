@@ -35,8 +35,8 @@
 
 ```python
 >>> # Вывод имени текущего скрипта
->>> name = BaseUtils.get_script_name()
->>> host.message(name)
+>>> script_name = BaseUtils.get_script_name()
+>>> script_name
 'Новый скрипт'
 ```
 

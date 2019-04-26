@@ -452,16 +452,20 @@ class MyFileHandler(logging.Handler):
         self._file_path = file_path
         self._max_mbytes = max_mbytes * 1024
 
-    def _size_ok(self):
+    def _check_size(self):
         if not os.path.isfile(self._file_path):
-            return True
-        return os.stat(self._file_path).st_size < self._max_mbytes
+            return
+        if os.stat(self._file_path).st_size > self._max_mbytes:
+            old_file_path = self._file_path + ".old"
+            if os.path.isfile(old_file_path):
+                os.remove(old_file_path)
+            os.rename(self._file_path, old_file_path)
 
     def emit(self, record):
-        if self._size_ok():
-            msg = self.format(record)
-            with open(self._file_path, "a") as log_file:
-                log_file.write(msg + "\n")
+        self._check_size()
+        msg = self.format(record)
+        with open(self._file_path, "a") as log_file:
+            log_file.write(msg + "\n")
 
 
 class BaseUtils:
@@ -1112,7 +1116,8 @@ class Worker(threading.Thread):
 
 class ThreadPool:
     """Pool of threads consuming tasks from a queue"""
-    def __init__(self, num_threads, callback=None):
+    def __init__(self, num_threads, callback=None, host_api=host):
+        self._host_api = host_api
         self.tasks = Queue(num_threads)
         for _ in xrange(num_threads):
             Worker(self.tasks)
@@ -1127,7 +1132,7 @@ class ThreadPool:
     def wait_completion(self):
         """Wait for completion of all the tasks in the queue"""
         self.tasks.join()
-        self.callback()
+        self._host_api.timeout(1000, self.callback)
 
 
 class HTTPRequester(py_object):
@@ -1268,7 +1273,7 @@ class HTTPRequester(py_object):
             >>> requests = HTTPRequester()
             >>> response = requests.post(
             >>>     "http://httpbin.org/post",
-            >>>     params={"PARAMETER": "TEST"},
+            >>>     data={"PARAMETER": "TEST"},
             >>>     headers={"Content-Type": "application/json"},
             >>> )
             >>> response.code
@@ -1332,7 +1337,7 @@ class ScriptObject(host.TrassirObject, py_object):
         self._name = name or BaseUtils.get_script_name()
         self.set_name(self._name)
 
-        self._guid = guid or "{}_object".format(scr_parent.guid)
+        self._guid = guid or "{}-object".format(scr_parent.guid)
         self.set_guid(self._guid)
 
         self._parent = parent or BaseUtils.get_server_guid()
@@ -4869,7 +4874,7 @@ class FTPSender(Sender):
         >>>     if progress == 100:
         >>>         host.timeout(3000, lambda: os.remove(BaseUtils.win_encode_path(file_path)))
         >>>
-        >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", CWD="/test_dir/", callback=callback)
+        >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", work_dir="/test_dir/", callback=callback)
         >>> sender.files(r"D:\Shots\export_video.avi")
     """
 
@@ -4927,11 +4932,12 @@ class FTPSender(Sender):
             ftp = ftplib.FTP()
             ftp.connect(self._host, self._port, timeout=10)
             ftp.login(self._user, self._passwd)
-            try:
-                ftp.cwd(self._work_dir)
-            except ftplib.error_perm:
-                ftp.mkd(self._work_dir)
-                ftp.cwd(self._work_dir)
+            if self._work_dir:
+                try:
+                    ftp.cwd(self._work_dir)
+                except ftplib.error_perm:
+                    ftp.mkd(self._work_dir)
+                    ftp.cwd(self._work_dir)
             ftp.encoding = "utf-8"
             return ftp
         except ftplib.all_errors:
@@ -4945,12 +4951,22 @@ class FTPSender(Sender):
         finally:
             self._ftp = None
 
-    def _send_file(self, file_path):
+    def _send_file(self, file_path, work_dir=None):
         """Storbinary file with self.ftp
 
         Args:
             file_path (str): Full file path
+            work_dir (str): Work dir on ftp
         """
+        if work_dir is not None:
+            if self._work_dir:
+                work_dir = os.path.normpath("{}/{}".format(self._work_dir, work_dir))
+            try:
+                self._ftp.cwd(work_dir)
+            except ftplib.error_perm:
+                self._ftp.mkd(work_dir)
+                self._ftp.cwd(work_dir)
+
         file_name = os.path.basename(file_path)
         upload_tracker = FtpUploadTracker(file_path, self.callback)
         with open(BaseUtils.win_encode_path(file_path), "rb") as opened_file:
@@ -4966,10 +4982,15 @@ class FTPSender(Sender):
                 self._ftp = self._get_connection()
 
             if self._ftp:
+                work_dir = None
                 file_path = self.queue.popleft()
+
+                if isinstance(file_path, tuple):
+                    file_path, work_dir = file_path
+
                 if BaseUtils.is_file_exists(BaseUtils.win_encode_path(file_path)):
                     try:
-                        self._send_file(file_path)
+                        self._send_file(file_path, work_dir)
 
                     except ftplib.all_errors as err:
                         self._host_api.timeout(
@@ -4997,11 +5018,17 @@ class FTPSender(Sender):
     def files(self, file_paths, *args):
         """Отправка файлов
 
+        Note:
+            Можно указать отдельный путь на ftp сервере для каждого файла.
+            Для этого список файлов на отправку должен быть приведен к виду
+            ``[(shot_path, ftp_path), ...]`` При этом так же будет учитываться
+            глобальная папка :obj:`work_dir` заданная при инициализации класса.
+
         Args:
             file_paths (:obj:`str` | :obj:`list`): Путь до файла или список
                 файлов для отправки
         """
-        if isinstance(file_paths, str):
+        if not isinstance(file_paths, list):
             file_paths = [file_paths]
 
         self.queue.extend(file_paths)
