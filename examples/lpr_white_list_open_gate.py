@@ -3,7 +3,7 @@
 # при распознавании номера из белого списка
 
 """
-[many lines of rassir_script_framework source]
+[many lines of trassir_script_framework source]
 """
 
 

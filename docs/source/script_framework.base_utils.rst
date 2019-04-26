@@ -17,6 +17,10 @@ is_folder_exists
 ----------------
 .. automethod:: trassir_script_framework.BaseUtils.is_folder_exists
 
+is_template_exists
+------------------
+.. automethod:: trassir_script_framework.BaseUtils.is_template_exists
+
 cat
 ---
 .. automethod:: trassir_script_framework.BaseUtils.cat
@@ -28,6 +32,14 @@ to_json
 lpr_flags_decode
 ----------------
 .. automethod:: trassir_script_framework.BaseUtils.lpr_flags_decode
+
+image_to_base64
+---------------
+.. automethod:: trassir_script_framework.BaseUtils.image_to_base64
+
+base64_to_html_img
+------------------
+.. automethod:: trassir_script_framework.BaseUtils.base64_to_html_img
 
 get_operator_gui
 ----------------

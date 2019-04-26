@@ -2,6 +2,7 @@ trassir_script_framework
 ========================
     .. toctree::
         script_framework.base_utils
+        script_framework.http_requester
         script_framework.poka_yoke
         script_framework.script_object
         script_framework.template

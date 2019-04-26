@@ -24,9 +24,9 @@ copyright = u'2019, AATrubilin'
 author = u'AATrubilin'
 
 # The short X.Y version
-version = u''
+version = u'0.3'
 # The full version, including alpha/beta/rc tags
-release = u'0.1'
+release = u'0.3a'
 
 
 # -- General configuration ---------------------------------------------------
@@ -203,11 +203,20 @@ intersphinx_mapping = {
 
 
 class TrassirHost:
-    def exec_encoded(self, code):
+    def __init__(self):
         pass
 
-    class TrassirObject():
+    @staticmethod
+    def objects_list(obj_type):
+        return [("name", "guid", obj_type, "parent")]
+
+    @staticmethod
+    def exec_encoded(code):
         pass
 
+    class TrassirObject:
+        def __init__(self):
+            pass
 
-sys.modules["host"] = TrassirHost()
+
+sys.modules["host"] = TrassirHost

@@ -2,7 +2,7 @@
 # Пример сохранения скриншота с отправкой на почту
 
 """
-[many lines of rassir_script_framework source]
+[many lines of trassir_script_framework source]
 """
 channels = Channels()
 sender = EmailSender("QS", "a.trubilin@dssl.ru"),

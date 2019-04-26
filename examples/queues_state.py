@@ -2,7 +2,7 @@
 # Вывод текущего состояния всех очередей
 
 """
-[many lines of rassir_script_framework source]
+[many lines of trassir_script_framework source]
 """
 
 zones = Zones()

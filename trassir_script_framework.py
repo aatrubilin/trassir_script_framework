@@ -3,30 +3,32 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.2b</version>
+    <version>0.3</version>
 </parameters>
 """
 
 import re
 import os
+import ssl
 import time
 import host
 import json
 import base64
 import ftplib
 import urllib
+import urllib2
+import httplib
 import logging
 import threading
 import subprocess
 
-from collections import deque
+from Queue import Queue
 from functools import wraps
+from collections import deque
 from datetime import datetime, date, timedelta
 from __builtin__ import object as py_object
 
-
-VERSION = {"TITLE": "script_utils", "VERSION": 0.2}
-
+VERSION = {"TITLE": "trassir_script_framework", "VERSION": 0.3}
 
 # _SERVICE_VERSION = 0.42
 tbot_service = """
@@ -411,7 +413,7 @@ class HostLogHandler(logging.Handler):
     """ Trassir main log handler """
 
     def __init__(self, host_api=host):
-        logging.Handler.__init__(self)
+        super(HostLogHandler, self).__init__()
         self._host_api = host_api
 
     def emit(self, record):
@@ -423,7 +425,7 @@ class PopupHandler(logging.Handler):
     """ Trassir popup handler """
 
     def __init__(self, host_api=host):
-        logging.Handler.__init__(self)
+        super(PopupHandler, self).__init__()
         self._host_api = host_api
         self._popups = {
             "CRITICAL": host_api.error,
@@ -442,10 +444,31 @@ class PopupHandler(logging.Handler):
         popup(msg)
 
 
+class MyFileHandler(logging.Handler):
+    """ My file handler """
+
+    def __init__(self, file_path, max_mbytes=10240):
+        super(MyFileHandler, self).__init__()
+        self._file_path = file_path
+        self._max_mbytes = max_mbytes * 1024
+
+    def _size_ok(self):
+        if not os.path.isfile(self._file_path):
+            return True
+        return os.stat(self._file_path).st_size < self._max_mbytes
+
+    def emit(self, record):
+        if self._size_ok():
+            msg = self.format(record)
+            with open(self._file_path, "a") as log_file:
+                log_file.write(msg + "\n")
+
+
 class BaseUtils:
     """Base utils for your scripts"""
 
     _host_api = host
+    _folders = {obj[1]: obj[3] for obj in host.objects_list("Folder")}
     _TEXT_FILE_EXTENSIONS = [".txt", ".csv", ".log"]
     _LPR_FLAG_BITS = {
         "LPR_UP": 0x00001,
@@ -462,6 +485,7 @@ class BaseUtils:
         "LPR_EXT_DB_ERROR": 0x00020,
         "LPR_CORRECTED": 0x00040,
     }
+    _HTML_IMG_TEMPLATE = """<img src="data:image/png;base64,{img}" {attr}>"""
 
     def __init__(self):
         pass
@@ -475,13 +499,15 @@ class BaseUtils:
         """
         return True
 
-    @staticmethod
-    def run_as_thread_v2(locked=False):
+    @classmethod
+    def run_as_thread_v2(cls, locked=False, daemon=True):
         """Декоратор для запуска функций в отдельном потоке.
 
         Args:
-            locked (:obj:`bool`, optional): Если ``True`` - запускает поток с блокировкой
-                доступа к ресурсам. По умолчанию ``locked=False``
+            locked (:obj:`bool`, optional): Если :obj:`True` - запускает поток с блокировкой
+                доступа к ресурсам. По умолчанию :obj:`False`
+            daemon (:obj:`bool`, optional): Устанавливает значение :obj:`threading.Thread.daemon`.
+                По умолчанию :obj:`True`
 
         Examples:
             >>> import time
@@ -501,21 +527,54 @@ class BaseUtils:
         def wrapped(fn):
             @wraps(fn)
             def run(*args, **kwargs):
+                def raise_exc(err):
+                    args = list(err.args)
+                    args[0] = "[{}]: {}".format(fn.__name__, args[0])
+                    err.args = args
+                    raise err
+
                 def locked_fn(*args_, **kwargs_):
                     lock.acquire()
                     try:
                         return fn(*args_, **kwargs_)
+                    except Exception as err:
+                        cls._host_api.timeout(1, lambda: raise_exc(err))
                     finally:
                         lock.release()
 
+                def unlocked_fn(*args_, **kwargs_):
+                    try:
+                        return fn(*args_, **kwargs_)
+                    except Exception as err:
+                        cls._host_api.timeout(1, lambda: raise_exc(err))
+
                 t = threading.Thread(
-                    target=locked_fn if locked else fn, args=args, kwargs=kwargs
+                    target=locked_fn if locked else unlocked_fn, args=args, kwargs=kwargs
                 )
-                t.daemon = True
+                t.daemon = daemon
                 t.start()
                 return t
 
             return run
+
+        return wrapped
+
+    @staticmethod
+    def catch_request_exceptions(func):
+        """Catch request errors"""
+
+        @wraps(func)
+        def wrapped(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except urllib2.HTTPError as e:
+                return e.code, "HTTPError: {}".format(e.code)
+            except urllib2.URLError, e:
+                return e.reason, "URLError: {}".format(e.reason)
+            except httplib.HTTPException, e:
+                return e, "HTTPException: {}".format(e)
+            except ssl.SSLError as e:
+                return e.errno, "SSLError: {}".format(e)
 
         return wrapped
 
@@ -596,6 +655,20 @@ class BaseUtils:
         os.remove(readme_file)
 
     @classmethod
+    def is_template_exists(cls, template_name):
+        """Проверяет существование шаблона
+
+        Args:
+            template_name (:obj:`str`): Имя шаблона
+
+        Returns:
+            :obj:`bool`: :obj:`True` если шаблон существует, иначе :obj:`False`
+        """
+        if template_name in [tmpl_.name for tmpl_ in cls._host_api.settings("templates").ls()]:
+            return True
+        return False
+
+    @classmethod
     def cat(cls, filepath, check_ext=True):
         """Выводит на отображение текстовую инфомрацию.
 
@@ -659,7 +732,7 @@ class BaseUtils:
         return type(data).__name__
 
     @classmethod
-    def to_json(cls, data, indent=4):
+    def to_json(cls, data, **kwargs):
         """Сериализация объекта в JSON стрку
 
         Note:
@@ -668,7 +741,6 @@ class BaseUtils:
 
         Args:
             data (:obj:`obj`): Объект для сериализации
-            indent (:obj:`int`, optional): Отступ. По умолчанию 4
 
         Returns:
             :obj:`str`: JSON строка
@@ -683,10 +755,8 @@ class BaseUtils:
 
         return json.dumps(
             data,
-            indent=indent,
-            sort_keys=True,
-            ensure_ascii=False,
             default=cls._json_serializer,
+            **kwargs
         )
 
     @classmethod
@@ -724,6 +794,61 @@ class BaseUtils:
             ['LPR_UP', 'LPR_BLACKLIST']
         """
         return [bit for bit, code in cls._LPR_FLAG_BITS.iteritems() if (flags & code)]
+
+    @classmethod
+    def image_to_base64(cls, image):
+        """Создает base64 из изображения
+
+        Args:
+            image (:obj:`str`): Путь к изображению или изображение
+
+        Returns:
+            :obj:`str`: Base64 image
+
+        Examples:
+            >>> BaseUtils.image_to_base64(r"manual\en\cloud-devices-16.png")
+            'iVBORw0KGgoAAAANSUhEUgAAB1MAAAH0CAYAAABo5wRhAAAACXBIWXMAAC4jA...'
+            >>> BaseUtils.image_to_base64(open(r"manual\en\cloud-devices-16.png", "rb").read())
+            'iVBORw0KGgoAAAANSUhEUgAAB1MAAAH0CAYAAABo5wRhAAAACXBIWXMAAC4jA...'
+        """
+        root, ext = os.path.splitext(image)
+
+        if ext:
+            image = cls.win_encode_path(image)
+            if not BaseUtils.is_file_exists(image):
+                return ""
+
+            with open(image, "rb") as image_file:
+                image = image_file.read()
+
+        return base64.b64encode(image)
+
+    @classmethod
+    def base64_to_html_img(cls, image_base64, **kwargs):
+        """Возвращает base64 изображение в `<img>` html теге
+
+        Args:
+            image_base64 (:obj:`str`): Base64 image
+            **kwargs: HTML `<img>` tag attributes. Подробнее на `html.com
+                <https://html.com/tags/img/#Attributes_of_img>`_
+
+        Returns:
+            :obj:`str`: html image
+
+        Examples:
+            >>> base64_image = BaseUtils.image_to_base64(r"manual\en\cloud-devices-16.png")
+            >>> html_image = BaseUtils.base64_to_html_img(base64_image, width=280, height=75)
+            >>> html_image
+            '<img src="data:image/png;base64,iVBORw0KGgoAA...Jggg==" width="280" height="75">'
+            >>> host.message(html_image)
+
+                .. image:: images/popup_sender.image.png
+        """
+        html_img = cls._HTML_IMG_TEMPLATE.format(
+            img=image_base64,
+            attr=" ".join('%s="%s"' % (key, value) for key, value in kwargs.iteritems()),
+        )
+        return html_img
 
     @classmethod
     def get_object(cls, obj_id):
@@ -781,6 +906,23 @@ class BaseUtils:
         else:
             name = obj.name
         return name
+
+    @classmethod
+    def get_full_guid(cls, obj_id):
+        """Возвращает полный guid объекта
+
+        Args:
+            obj_id (:obj:`str`): Guid объекта или его имя
+
+        Returns:
+            :obj:`str`: Полный guid объекта
+        """
+
+        tr_obj = cls.get_object(obj_id)
+        if tr_obj is not None:
+            for obj in cls._host_api.objects_list(""):
+                if tr_obj.guid == obj[1]:
+                    return "{}_{}".format(obj[1], cls._folders.get(obj[3], obj[3]))
 
     @classmethod
     def get_operator_gui(cls):
@@ -850,12 +992,12 @@ class BaseUtils:
 
     @classmethod
     def get_logger(
-        cls,
-        name=None,
-        host_log="WARNING",
-        popup_log="ERROR",
-        file_log=None,
-        file_name=None,
+            cls,
+            name=None,
+            host_log="WARNING",
+            popup_log="ERROR",
+            file_log=None,
+            file_name=None,
     ):
         """Возвращает логгер с предустановленными хэндлерами
 
@@ -897,6 +1039,7 @@ class BaseUtils:
         """
         logger_ = logging.getLogger(name or __name__)
         logger_.setLevel("DEBUG")
+
         if logger_.handlers:
             for handler in logger_.handlers[:]:
                 handler.close()
@@ -916,6 +1059,15 @@ class BaseUtils:
             host_handler.setFormatter(host_formatter)
             logger_.addHandler(host_handler)
 
+        if popup_log:
+            popup_handler = PopupHandler()
+            popup_handler.setLevel(popup_log)
+            popup_formatter = logging.Formatter(
+                fmt="<b>[%(levelname)s]</b> Line: %(lineno)s<br><i>%(message).630s</i>"
+            )
+            popup_handler.setFormatter(popup_formatter)
+            logger_.addHandler(popup_handler)
+
         if file_log:
             if file_name is None:
                 file_name = "{}.log".format(cls.get_script_name())
@@ -923,7 +1075,7 @@ class BaseUtils:
             file_path = os.path.join(cls.get_screenshot_folder(), file_name)
             file_path = cls.win_encode_path(file_path)
 
-            file_handler = logging.FileHandler(file_path)
+            file_handler = MyFileHandler(file_path)
             file_handler.setLevel(file_log)
             if name:
                 file_formatter = logging.Formatter(
@@ -938,16 +1090,208 @@ class BaseUtils:
             file_handler.setFormatter(file_formatter)
             logger_.addHandler(file_handler)
 
-        if popup_log:
-            popup_handler = PopupHandler()
-            popup_handler.setLevel(popup_log)
-            popup_formatter = logging.Formatter(
-                fmt="<b>[%(levelname)s]</b> Line: %(lineno)s<br><i>%(message).630s</i>"
-            )
-            popup_handler.setFormatter(popup_formatter)
-            logger_.addHandler(popup_handler)
-
         return logger_
+
+
+class Worker(threading.Thread):
+    """Thread executing tasks from a given tasks queue"""
+    def __init__(self, tasks):
+        super(Worker, self).__init__()
+        self.tasks = tasks
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        while True:
+            func, args, kargs = self.tasks.get()
+            try:
+                func(*args, **kargs)
+            finally:
+                self.tasks.task_done()
+
+
+class ThreadPool:
+    """Pool of threads consuming tasks from a queue"""
+    def __init__(self, num_threads, callback=None):
+        self.tasks = Queue(num_threads)
+        for _ in xrange(num_threads):
+            Worker(self.tasks)
+        if callback is None:
+            callback = BaseUtils.do_nothing
+        self.callback = callback
+
+    def add_task(self, func, *args, **kargs):
+        """Add a task to the queue"""
+        self.tasks.put((func, args, kargs))
+
+    def wait_completion(self):
+        """Wait for completion of all the tasks in the queue"""
+        self.tasks.join()
+        self.callback()
+
+
+class HTTPRequester(py_object):
+    """Framework for urllib2
+
+    See Also:
+        https://docs.python.org/2/library/urllib2.html#urllib2.build_opener
+
+    Args:
+        opener (:obj:`urllib2.OpenerDirector`, optional): Обработчик запросов.
+            По умолчанию :obj:`None`
+        timeout (:obj:`int`, optional): Время ожидания запроса, в секундах.
+            По умолчанию :obj:`timeout=10`
+
+    Examples:
+        Пример запроса к SDK Trassir
+
+        >>> # Отключение проверки сертификата
+        >>> context = ssl.create_default_context()
+        >>> context.check_hostname = False
+        >>> context.verify_mode = ssl.CERT_NONE
+        >>>
+        >>> handler = urllib2.HTTPSHandler(context=context)
+        >>> opener = urllib2.build_opener(handler)
+        >>>
+        >>> requests = HTTPRequester(opener, timeout=20)
+        >>> response = requests.get(
+        >>>     "https://172.20.0.101:8080/login",
+        >>>     params={"username": "Admin", "password": "12345"}
+        >>> )
+        >>>
+        >>> response.code
+        200
+        >>> response.text
+        '{\\n   "sid" : "T6LAAcxg",\\n   "success" : 1\\n}\\n'
+        >>> response.json
+        {u'success': 1, u'sid': u'T6LAAcxg'}
+    """
+
+    class Response(py_object):
+        """Класс ответа от сервера
+
+        Attributes:
+            code (:obj:`str` | :obj:`int`): Код ответа сервера
+            text (:obj:`str`): Текст ответа
+            json (:obj:`dict` | :obj:`list`): Создает объект из json ответа
+        """
+
+        def __init__(self, *args):
+            self.code, self.text = args
+
+        @property
+        def json(self):
+            return json.loads(self.text)
+
+    def __init__(self, opener=None, timeout=10):
+        if opener is None:
+            handler = urllib2.BaseHandler()
+            opener = urllib2.build_opener(handler)
+        self._opener = opener
+
+        self.timeout = timeout
+
+    @BaseUtils.catch_request_exceptions
+    def _get_response(self, request):
+        """Returns response
+
+        Args:
+            request (:obj:`urllib2.Request`): This class is an abstraction of a URL request
+        """
+        response = self._opener.open(request, timeout=self.timeout)
+        return response.code, response.read()
+
+    @staticmethod
+    def _parse_params(**params):
+        """Params get string params
+
+        Args:
+            **params (dict): Keyword arguments
+
+        Returns:
+            str: params string
+        """
+        return "&".join("{key}={value}".format(key=key, value=value) for key, value in params.iteritems())
+
+    @staticmethod
+    def _prepare_headers(headers):
+        """Prepare headers for request"""
+        if headers is None:
+            headers = {}
+
+        if "User-Agent" not in headers:
+            headers["User-Agent"] = "TrassirScript"
+        return headers
+
+    def get(self, url, params=None, headers=None):
+        """Создает GET запрос по указанному :obj:`url`
+
+        Args:
+            url (:obj:`str`): Url для запроса
+            params (:obj:`dict`, optional): Параметры GET запроса
+            headers (:obj:`dict`, optional): Заголовки запроса
+
+        Examples:
+            >>> requests = HTTPRequester()
+            >>> response = requests.get(
+            >>>     "http://httpbin.org/get",
+            >>>     params={"PARAMETER": "TEST"},
+            >>> )
+            >>> response.code
+            200
+            >>> response.text
+            '{\\n  "args": {\\n    "PARAMETER": "TEST"\\n  }, \\n ...'
+            >>> response.json
+            {u'args': {u'PARAMETER': u'TEST'}, ...}
+
+        Returns:
+            :class:`HTTPRequester.Response`: Response instance
+        """
+        if params is not None:
+            url += "?{params}".format(params=self._parse_params(**params))
+
+        headers = self._prepare_headers(headers)
+
+        request = urllib2.Request(url, headers=headers)
+        response = self._get_response(request)
+        return self.Response(*response)
+
+    def post(self, url, data=None, headers=None):
+        """Создает POST запрос по указанному :obj:`url`
+
+        Args:
+            url (:obj:`str`): Url для запроса
+            data (:obj:`dict`, optional): Данные POST запроса
+            headers (:obj:`dict`, optional): Заголовки запроса
+
+        Examples:
+            >>> requests = HTTPRequester()
+            >>> response = requests.post(
+            >>>     "http://httpbin.org/post",
+            >>>     params={"PARAMETER": "TEST"},
+            >>>     headers={"Content-Type": "application/json"},
+            >>> )
+            >>> response.code
+            200
+            >>> response.text
+            '{\\n  "args": {\\n    "PARAMETER": "TEST"\\n  }, \\n ...'
+            >>> response.json
+            {u'args': {u'PARAMETER': u'TEST'}, ...}
+
+        Returns:
+            :class:`HTTPRequester.Response`: Response instance
+        """
+        if data is None:
+            data = {}
+
+        if isinstance(data, dict):
+            data = urllib.urlencode(data)
+
+        headers = self._prepare_headers(headers)
+
+        request = urllib2.Request(url, data=data, headers=headers)
+        response = self._get_response(request)
+        return self.Response(*response)
 
 
 class ScriptObject(host.TrassirObject, py_object):
@@ -1070,6 +1414,9 @@ class ScriptObject(host.TrassirObject, py_object):
             channel (:obj:`str`, optional): Ассоциированный с событием канал (``p2``)
             data (:obj:`str`, optional): Дополнительные данные (``p3``)
         """
+        if not isinstance(data, str):
+            data = BaseUtils.to_json(data, indent=None)
+
         self.fire_event("Script: %1", message, channel, data)
 
 
@@ -1083,23 +1430,20 @@ class ShotSaver(py_object):
     """Класс для сохранения скриншотов
 
     Examples:
-        Смена папки сохранения скриншотов по умолчанию
 
         >>> ss = ShotSaver()
+        >>> # Смена папки сохранения скриншотов по умолчанию
         >>> ss.screenshots_folder
         '/home/trassir/shots'
         >>> ss.screenshots_folder += "/my_shots"
         >>> ss.screenshots_folder
         '/home/trassir/shots/my_shots'
-
-        Сохранение скриншота с канала ``"e80kgBLh_pV4ggECb"``
-
-        >>> ss = ShotSaver()
+        >>>
+        >>> # Сохранение скриншота с канала ``"e80kgBLh_pV4ggECb"``
         >>> ss.shot("e80kgBLh_pV4ggECb")
         '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
-
-        Сохранение скриншота с вызовом ``callback`` функции после выполнения
-
+        >>>
+        >>> #Сохранение скриншота с вызовом ``callback`` функции после выполнения
         >>> def callback(success, shot_path):
         >>>     # Пример callback функции
         >>>     # Args:
@@ -1109,9 +1453,29 @@ class ShotSaver(py_object):
         >>>         host.message("Скриншот успешно сохранен<br>%s" % shot_path)
         >>>     else:
         >>>         host.error("Ошибка сохранения скриншота <br>%s" % shot_path)
-
-        >>> ss = ShotSaver()
+        >>>
         >>> ss.async_shot(callback, "e80kgBLh_pV4ggECb")
+        >>>
+        >>> #Сохранение большого количества скриншотов с вызовом ``callback`` функции после выполнения
+        >>> from datetime import datetime, timedelta
+        >>>
+        >>> def end_callback():
+        >>>     host.message("Все скриншоты сохранены")
+        >>>
+        >>> channel_guid = "e80kgBLh_pV4ggECb"
+        >>> dt_now = datetime.now()
+        >>> dt_range = [dt_now - timedelta(minutes=10*i) for i in xrange(12)]
+        >>> dt_range
+        [datetime.datetime(2019, 4, 25, 9, 38, 9, 253000), datetime.datetime(2019, 4, 25, 9, 28, 9, 253000), ...]
+        >>> shot_args = []
+        >>> for dt in dt_range:
+        >>>     kwargs = {
+        >>>         "dt": dt,
+        >>>         "callback": callback,
+        >>>     }
+        >>>     shot_args.append(((channel_guid,), kwargs))
+        >>>
+        >>> ss.pool_shot(shot_args, pool_size=10, end_callback=end_callback)
     """
 
     _AWAITING_FILE = 5  # Time for check file function, sec
@@ -1203,9 +1567,8 @@ class ShotSaver(py_object):
 
         return os.path.join(file_path, file_name)
 
-    @BaseUtils.run_as_thread_v2()
-    def async_shot(
-        self, callback, channel_full_guid, dt=None, file_name=None, file_path=None
+    def _async_shot(
+            self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None,
     ):
         """Вызывает ``callback`` после сохнанения скриншота
 
@@ -1215,23 +1578,66 @@ class ShotSaver(py_object):
         * Вызвает ``callback`` функцию
 
         Args:
-            callback (:obj:`function`): Callable function
-            channel_full_guid (:obj:`str`): Полный guid анала. Например: ``"CFsuNBzt_pV4ggECb"``
+            channel_full_guid (:obj:`str`): Полный guid канала. Например: ``"CFsuNBzt_pV4ggECb"``
             dt (:obj:`datetime.datetime`, optional): :obj:`datetime.datetime` для скриншота.
                 По умолчанию :obj:`None`
             file_name (:obj:`str`, optional): Имя файла с расширением. По умолчанию :obj:`None`
             file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
+            callback (:obj:`function`): Callable function
         """
+        if callback is None:
+            callback = BaseUtils.do_nothing
+
         shot_file = ""
         for _ in xrange(self._ASYNC_SHOT_TRIES):
             shot_file = self.shot(
                 channel_full_guid, dt=dt, file_name=file_name, file_path=file_path
             )
-            if BaseUtils.is_file_exists(shot_file, self._AWAITING_FILE):
+            if BaseUtils.is_file_exists(BaseUtils.win_encode_path(shot_file), self._AWAITING_FILE):
                 self._host_api.timeout(100, lambda: callback(True, shot_file))
                 break
         else:
             self._host_api.timeout(100, lambda: callback(False, shot_file))
+
+    @BaseUtils.run_as_thread_v2()
+    def async_shot(
+            self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None
+    ):
+        """Вызывает ``callback`` после сохнанения скриншота
+
+        * Метод работает в отдельном потоке
+        * Вызывает функцию :meth:`ShotSaver.shot`
+        * Ждет выполнения функции :meth:`BaseUtils.check_file` ``tries=10``
+        * Вызвает ``callback`` функцию
+
+        Args:
+            channel_full_guid (:obj:`str`): Полный guid канала. Например: ``"CFsuNBzt_pV4ggECb"``
+            dt (:obj:`datetime.datetime`, optional): :obj:`datetime.datetime` для скриншота.
+                По умолчанию :obj:`None`
+            file_name (:obj:`str`, optional): Имя файла с расширением. По умолчанию :obj:`None`
+            file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
+            callback (:obj:`function`, optional): Callable function
+        """
+        self._async_shot(channel_full_guid, dt=dt, file_name=file_name, file_path=file_path, callback=callback)
+
+    @BaseUtils.run_as_thread_v2()
+    def pool_shot(self, shot_args, pool_size=10, end_callback=None):
+        """Сохраняет скриншоты по очереди.
+
+        Одновременно в работе не более :obj:`pool_size` задачь.
+        Вызывает ``callback`` после сохнанения всех скриншотов
+        см. :meth:`ShotSaver.async_shot`
+
+        Args:
+            shot_args (List[:obj:`tuple`]): Аргументы для функции async_shot
+            pool_size (:obj:`int`, optional): Размер пула. По умолчанию :obj:`pool_size=10`
+            end_callback (:obj:`function`, optional): Вызывается после сохранения всех скриншотов
+        """
+        pool = ThreadPool(pool_size, end_callback)
+        for args, kwargs in shot_args:
+            pool.add_task(self._async_shot, *args, **kwargs)
+        pool.wait_completion()
+        return pool
 
 
 class VideoExporterError(ScriptError):
@@ -1363,15 +1769,15 @@ class VideoExporter(py_object):
         self._check_queue()
 
     def _export(
-        self,
-        channel_full_guid,
-        dt_start,
-        dt_end=None,
-        duration=60,
-        prefer_substream=False,
-        file_name=None,
-        file_path=None,
-        callback=None,
+            self,
+            channel_full_guid,
+            dt_start,
+            dt_end=None,
+            duration=60,
+            prefer_substream=False,
+            file_name=None,
+            file_path=None,
+            callback=None,
     ):
         """Exporting file
 
@@ -1452,15 +1858,15 @@ class VideoExporter(py_object):
         )
 
     def export(
-        self,
-        channel_full_guid,
-        dt_start,
-        dt_end=None,
-        duration=60,
-        prefer_substream=False,
-        file_name=None,
-        file_path=None,
-        callback=None,
+            self,
+            channel_full_guid,
+            dt_start,
+            dt_end=None,
+            duration=60,
+            prefer_substream=False,
+            file_name=None,
+            file_path=None,
+            callback=None,
     ):
         """Запускает экспорт или добавляет задачу экспорта в очередь.
 
@@ -1525,7 +1931,7 @@ class Template(py_object):
         данный класс выберет первый попавшийся шаблон с заданным именем.
 
     Warning:
-            Работа с контентом шаблона может привести к крашам трассира.
+            Работа с контентом шаблона может привести к падениям трассира.
             Используйте данный класс на свой страх и риск!
 
     Tip:
@@ -1843,7 +2249,8 @@ class BasicObject(py_object):
                         "Задайте уникальные имена".format(obj=obj)
                     )
 
-    def _objects_str_to_list(self, objects):
+    @staticmethod
+    def _objects_str_to_list(objects):
         """Split object names if objects is str and strip each name
 
         Args:
@@ -1944,13 +2351,13 @@ class ObjectFromSetting(BasicObject):
         return objects
 
     def _get_objects_from_settings(
-        self,
-        settings_path,
-        object_type,
-        object_names=None,
-        server_guid=None,
-        ban_empty_result=False,
-        sub_condition=None,
+            self,
+            settings_path,
+            object_type,
+            object_names=None,
+            server_guid=None,
+            ban_empty_result=False,
+            sub_condition=None,
     ):
         """Check if objects exists and returns list from _load_objects_from_settings
 
@@ -1961,7 +2368,7 @@ class ObjectFromSetting(BasicObject):
             settings_path (:obj:`str`): Trassir settings path. Example ``"scripts"``.
                 Click F4 in the Trassir settings window to show hidden parameters.
             object_type (:obj:`str` | :obj:`list`): Loading object type. Example ``"EmailAccount"``
-            object_names (:obj:`str` | :obj:`list`, optional): Comma spaced string or 
+            object_names (:obj:`str` | :obj:`list`, optional): Comma spaced string or
                 list of object names. Default :obj:`None`
             server_guid (:obj:`str` | :obj:`list`, optional): Server guid. Default :obj:`None`
             ban_empty_result (:obj:`bool`, optional): If True - raise error if no one object found
@@ -2124,10 +2531,10 @@ class Channels(ObjectFromSetting):
             if not zombie:
                 try:
                     return (
-                        1
-                        - self._host_api.settings(sett.cd("info")["grabber_path"])[
-                            "grabber_enabled"
-                        ]
+                            1
+                            - self._host_api.settings(sett.cd("info")["grabber_path"])[
+                                "grabber_enabled"
+                            ]
                     )
                 except KeyError:
                     return 1
@@ -2666,7 +3073,7 @@ class EmailAccounts(ObjectFromSetting):
     Examples:
         >>> email_accounts = EmailAccounts()
         >>> email_accounts.get_all()
-        [TrObject('Новая учетная запись e-mail'), TrObject('QS')]
+        [TrObject('Новая учетная запись e-mail'), TrObject('MyAccount')]
     """
 
     def __init__(self, server_guid=None):
@@ -3004,7 +3411,7 @@ class Persons(ObjectFromSetting):
                     'comment': 'Comment',
                     'contact_info': 'Contact info',
                     'folder_guid': 'n68LOBhG',
-                    'image': <base64 image>,
+                    'image': <image, str>,
                     'image_guid': 'gBHZ2vpz',
                     'effective_rights': 0,
                 },
@@ -3019,7 +3426,7 @@ class Persons(ObjectFromSetting):
                 'comment': 'Comment',
                 'contact_info': 'Contact info',
                 'folder_guid': 'n68LOBhG',
-                'image': <base64 image>,
+                'image': <image, str>,
                 'image_guid': 'gBHZ2vpz',
                 'effective_rights': 0,
             }
@@ -3039,6 +3446,30 @@ class Persons(ObjectFromSetting):
 
         self._persons = None
 
+    def _update_persons_dict(self, timeout=10):
+        """Updating self._persons dict"""
+        persons = self.get_persons(timeout=timeout)
+        by_guid, by_name = {}, {}
+        for person in persons:
+            by_guid[person["guid"]] = person
+            by_name[person["name"]] = person
+
+        self._persons = {
+            "update_ts": int(time.time()),
+            "by_guid": by_guid,
+            "by_name": by_name,
+        }
+
+    def _check_loaded_persons(self, timeout=10):
+        """This method check if self._persons dict is need to be updated"""
+        ts_now = int(time.time())
+
+        if (
+                self._persons is None
+                or (ts_now - self._persons["update_ts"]) > self._PERSONS_UPDATE_TIMEOUT
+        ):
+            self._update_persons_dict(timeout=timeout)
+
     def get_folders(self, names=None):
         """Возвращает список папок персон
 
@@ -3052,7 +3483,7 @@ class Persons(ObjectFromSetting):
         """
         try:
             folders = self._get_objects_from_settings(
-                "/{server_guid}/_persons",
+                "/{server_guid}/persons",
                 "PersonsSubFolder",
                 object_names=names,
                 server_guid=self.server_guid,
@@ -3123,25 +3554,7 @@ class Persons(ObjectFromSetting):
 
         return persons
 
-    def _update_persons_dict(self):
-        """Updating self._persons dict"""
-        persons = self.get_persons()
-        self._persons = {
-            "update_ts": int(time.time()),
-            "by_guid": {person["guid"]: person for person in persons},
-        }
-
-    def _check_loaded_persons(self):
-        """This method check if self._persons dict is need to be updated"""
-        ts_now = int(time.time())
-
-        if (
-            self._persons is None
-            or (ts_now - self._persons["update_ts"]) > self._PERSONS_UPDATE_TIMEOUT
-        ):
-            self._update_persons_dict()
-
-    def get_person_by_guid(self, person_guid):
+    def get_person_by_guid(self, person_guid, timeout=10):
         """Возвращает информацию о персоне по его guid
 
         Note:
@@ -3151,12 +3564,33 @@ class Persons(ObjectFromSetting):
 
         Args:
             person_guid (:obj:`str`): Guid персоны
+            timeout (:obj:`int`, optional): Макс. время запроса к БД.
+                По умолчанию ``timeout=10``
 
         Returns:
             :obj:`dict`: Даные о персоне или :obj:`None` если персона не найдена
         """
-        self._check_loaded_persons()
+        self._check_loaded_persons(timeout=timeout)
         return self._persons["by_guid"].get(person_guid)
+
+    def get_person_by_name(self, person_name, timeout=10):
+        """Возвращает информацию о персоне по его имени
+
+        Note:
+            Для уменьшения кол-ва запросов к БД - метод создает локальную
+            копию всех персон при первом запросе и обновляет ее вместе
+            с последующими запросами не чаще чем 1 раз в 10 минут.
+
+        Args:
+            person_name (:obj:`str`): Имя персоны
+            timeout (:obj:`int`, optional): Макс. время запроса к БД.
+                По умолчанию ``timeout=10``
+
+        Returns:
+            :obj:`dict`: Даные о персоне или :obj:`None` если персона не найдена
+        """
+        self._check_loaded_persons(timeout=timeout)
+        return self._persons["by_name"].get(person_name)
 
 
 class ObjectFromList(BasicObject):
@@ -3187,12 +3621,12 @@ class ObjectFromList(BasicObject):
         return objects
 
     def _get_objects_from_list(
-        self,
-        object_type,
-        object_names=None,
-        server_guid=None,
-        ban_empty_result=False,
-        sub_condition=None,
+            self,
+            object_type,
+            object_names=None,
+            server_guid=None,
+            ban_empty_result=False,
+            sub_condition=None,
     ):
         """Check if objects exists and returns list from _load_objects_from_settings
 
@@ -3589,10 +4023,10 @@ class Borders(ObjectFromList):
             List[:class:`TrObject`]: Список объектов
         """
         all_borders = (
-            self.get_head()
-            + self.get_people()
-            + self.get_simt()
-            + self.get_deep_people()
+                self.get_head()
+                + self.get_people()
+                + self.get_simt()
+                + self.get_deep_people()
         )
 
         if names is None:
@@ -3734,10 +4168,10 @@ class PokaYoke(py_object):
         Examples:
             >>> PokaYoke.check_email_account("")
             ParameterError: 'EmailAccount' не выбраны
-            >>> PokaYoke.check_email_account("QSs")
-            ObjectsNotFoundError: Не найдены объекты EmailAccount: QSs
-            >>> PokaYoke.check_email_account("QS")
-            [TrObject('QS')]
+            >>> PokaYoke.check_email_account("YourAccount")
+            ObjectsNotFoundError: Не найдены объекты EmailAccount: YourAccount
+            >>> PokaYoke.check_email_account("MyAccount")
+            [TrObject('MyAccount')]
         """
         e_accounts = EmailAccounts(BaseUtils.get_server_guid())
         return e_accounts.get_all(account_name)
@@ -3760,11 +4194,10 @@ class PokaYoke(py_object):
             ParameterError: Если найден невалидный email
 
         Examples:
-            >>> pk = PokaYoke()
-            >>> pk.parse_emails("a.trubilil!dssl.ru,support@dssl.ru")
+            >>> PokaYoke.parse_emails("a.trubilil!dssl.ru,support@dssl.ru")
             ParameterError: Email 'a.trubilil!dssl.ru' is not valid!
             >>>
-            >>> pk.parse_emails("a.trubilil@dssl.ru,support@dssl.ru")
+            >>> PokaYoke.parse_emails("a.trubilil@dssl.ru,support@dssl.ru")
             ['a.trubilil@dssl.ru', 'support@dssl.ru']
         """
         mailing_list = mailing_list.replace(" ", "")
@@ -3809,11 +4242,10 @@ class PokaYoke(py_object):
             ParameterError: Если найден невалидный номер телефона
 
         Examples:
-            >>> pk = PokaYoke()
-            >>> pk.check_phones("79999999999,78888888888A")
+            >>> PokaYoke.check_phones("79999999999,78888888888A")
             ParameterError: Bad chars in phone list: `A`
             >>>
-            >>> pk.check_phones("a.trubilil@dssl.ru,support@dssl.ru")
+            >>> PokaYoke.check_phones("a.trubilil@dssl.ru,support@dssl.ru")
             '79999999999,78888888888'
         """
         phones = phones.replace(" ", "")
@@ -3861,17 +4293,14 @@ class Sender(py_object):
             with open(image_path, "rb") as image_file:
                 return base64.b64encode(image_file.read())
 
-    def _get_html_img(self, image_base64, **kwargs):
+    @staticmethod
+    def _get_html_img(image_base64, **kwargs):
         """Returns html img
 
         Args:
             image_base64 (str): Base64 image
         """
-        html_img = self._HTML_IMG_TEMPLATE.format(
-            img=image_base64,
-            attr="".join('%s="%s"' % (key, value) for key, value in kwargs.iteritems()),
-        )
-        return html_img
+        return BaseUtils.base64_to_html_img(image_base64, **kwargs)
 
     def text(self, text):
         """Send text
@@ -3956,7 +4385,7 @@ class PopupSender(Sender):
             self.text("<b>File not found</b><br>{}".format(image_path), popup_type)
             return
 
-        html_image = self._get_html_img(image_base64, **self._attr)
+        html_image = BaseUtils.base64_to_html_img(image_base64, **self._attr)
 
         html = "{image}"
         if text:
@@ -4016,7 +4445,7 @@ class PopupWithBtnSender(Sender):
             self.text("<b>File not found</b><br>{}".format(image_path))
             return
 
-        html_image = self._get_html_img(image_base64, **self._attr)
+        html_image = BaseUtils.base64_to_html_img(image_base64, **self._attr)
 
         html = "{image}"
         if text:
@@ -4032,6 +4461,11 @@ class EmailSender(Sender):
         По умолчанию тема сообщений соответствует шаблону
         ``{server_name} -> {script_name}``
 
+    Tip:
+        При отправке изображения с текстом предпочтительней использовать метод
+        :meth:`EmailSender.image` с необязательным аргументом :obj:`text` чем
+        :meth:`EmailSender.text` с необазательным аргументом :obj:`attachments`
+
     Args:
         account (:obj:`str`): E-Mail аккаунт trassir. Проверяется
             методом :meth:`PokaYoke.check_email_account`
@@ -4044,7 +4478,7 @@ class EmailSender(Sender):
             По умолчанию 25 * 1024 * 1024
 
     Examples:
-        >>> sender = EmailSender("QS", "my_mail@google.com")
+        >>> sender = EmailSender("MyAccount", "my_mail@google.com")
         >>> sender.text("Hello World!")
 
             .. image:: images/email_sender.text.png
@@ -4378,9 +4812,6 @@ class FtpUploadTracker:
         self.total_size = os.path.getsize(BaseUtils.win_encode_path(file_path))
         self.file_path = file_path
         self.callback = callback
-        self.logger = BaseUtils.get_logger(
-            host_log=None, popup_log=None, file_log="DEBUG"
-        )
 
     def handle(self, block):
         """Handler for storbinary
@@ -4404,6 +4835,13 @@ class FTPSender(Sender):
     При инициализации проверят подключение к ftp серверу. Файлы отправляет
     по очереди. Максимальный размер очереди можно изменить. Во время
     выполнения передает текущий прогресс отправки файла в callback функцию.
+
+    Note:
+        Помимо прогресса в функцию callback может вернуться код ошибки.
+            - -1 Файл не существует.
+            - -2 Ошибка отправки на ftp, файл будет повторно отправлен.
+            - -3 Неизвестная ошибка.
+
 
     Args:
         host (:obj:`str`): Адрес ftp сервера.
@@ -4431,19 +4869,19 @@ class FTPSender(Sender):
         >>>     if progress == 100:
         >>>         host.timeout(3000, lambda: os.remove(BaseUtils.win_encode_path(file_path)))
         >>>
-        >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", dir="/test_dir/", callback=callback)
+        >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", CWD="/test_dir/", callback=callback)
         >>> sender.files(r"D:\Shots\export_video.avi")
     """
 
     def __init__(
-        self,
-        host,
-        port=21,
-        user="anonymous",
-        passwd="",
-        work_dir=None,
-        callback=None,
-        queue_maxlen=1000,
+            self,
+            host,
+            port=21,
+            user="anonymous",
+            passwd="",
+            work_dir=None,
+            callback=None,
+            queue_maxlen=1000,
     ):
         super(FTPSender, self).__init__()
         self._host = host
@@ -4452,7 +4890,7 @@ class FTPSender(Sender):
         self._passwd = passwd
         self._work_dir = work_dir
 
-        self._queue = deque(maxlen=queue_maxlen)
+        self.queue = deque(maxlen=queue_maxlen)
 
         self._ftp = None
 
@@ -4460,6 +4898,8 @@ class FTPSender(Sender):
             callback = BaseUtils.do_nothing
 
         self.callback = callback
+
+        self._work_now = False
 
         self._check_connection()
 
@@ -4521,12 +4961,12 @@ class FTPSender(Sender):
     @BaseUtils.run_as_thread_v2()
     def _sender(self):
         """Send files in queue"""
-        if self._queue:
+        if self.queue:
             if self._ftp is None:
                 self._ftp = self._get_connection()
 
             if self._ftp:
-                file_path = self._queue.popleft()
+                file_path = self.queue.popleft()
                 if BaseUtils.is_file_exists(BaseUtils.win_encode_path(file_path)):
                     try:
                         self._send_file(file_path)
@@ -4535,7 +4975,7 @@ class FTPSender(Sender):
                         self._host_api.timeout(
                             100, lambda: self.callback(file_path, -2, error=err)
                         )
-                        self._queue.append(file_path)
+                        self.queue.append(file_path)
                         self._close_connection()
 
                     except Exception as err:
@@ -4551,6 +4991,7 @@ class FTPSender(Sender):
 
             self._host_api.timeout(500, self._sender)
         else:
+            self._work_now = False
             self._close_connection()
 
     def files(self, file_paths, *args):
@@ -4563,6 +5004,7 @@ class FTPSender(Sender):
         if isinstance(file_paths, str):
             file_paths = [file_paths]
 
-        self._queue.extend(file_paths)
-        if not self._ftp:
+        self.queue.extend(file_paths)
+        if not self._work_now:
+            self._work_now = True
             self._sender()

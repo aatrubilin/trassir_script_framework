@@ -2,8 +2,33 @@
 Changelog
 =========
 
+Version 0.3
+===========
+*Released future*
+
+New Features
+
+- Added :meth:`trassir_script_framework.BaseUtils.is_template_exists`
+- Added :class:`trassir_script_framework.HTTPRequester`
+- Added :meth:`trassir_script_framework.ShotSaver.pool_shot`
+- Added :meth:`trassir_script_framework.Persons.get_person_by_name`
+- Added :meth:`trassir_script_framework.BaseUtils.image_to_base64`
+- Added :meth:`trassir_script_framework.BaseUtils.base64_to_html_img`
+- Added more `examples
+  <https://github.com/AATrubilin/trassir_script_framework/tree/master/examples>`_
+
+Changes
+
+- Added data to string transform :meth:`trassir_script_framework.ScriptObject.fire_event_v2`
+- Added raise exception in functions with :meth:`trassir_script_framework.BaseUtils.run_as_thread_v2`
+- Change argument structure in :meth:`trassir_script_framework.BaseUtils.to_json`
+- Change argument structure in :meth:`trassir_script_framework.ShotSaver.async_shot`
+- Fix: :class:`trassir_script_framework.FTPSender` errors when send several files
+- Fix: :class:`trassir_script_framework.FTPSender` remove self.logger
+- Fix: :meth:`trassir_script_framework.BaseUtils.get_logger` permission denied when deleting log file
+
 Version 0.2b
-==============
+============
 *Released 2019-04-12*
 
 New Features
@@ -57,7 +82,7 @@ Changes
 
 
 Version 0.1b
-==============
+============
 *Released 2019-04-05*
 
 - Beta release
