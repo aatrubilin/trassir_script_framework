@@ -1,3 +1,4 @@
+[![GitHub release](https://img.shields.io/github/release/aatrubilin/trassir_script_framework.svg)](trassir_script_framework.py)
 [![Documentation Status](https://readthedocs.org/projects/trassir-script-framework/badge/?version=latest)](https://trassir-script-framework.readthedocs.io/ru/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/AATrubilin/trassir_script_framework.svg?branch=master)](https://travis-ci.org/AATrubilin/trassir_script_framework)
 [![GitHub](https://img.shields.io/github/license/aatrubilin/trassir_script_framework.svg)](https://github.com/AATrubilin/trassir_script_framework/blob/master/LICENSE)
