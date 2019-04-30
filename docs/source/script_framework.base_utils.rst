@@ -60,3 +60,7 @@ get_screenshot_folder
 get_logger
 ----------
 .. automethod:: trassir_script_framework.BaseUtils.get_logger
+
+set_script_name
+---------------
+.. automethod:: trassir_script_framework.BaseUtils.set_script_name

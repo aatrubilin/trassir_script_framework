@@ -3,7 +3,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.3</version>
+    <version>0.4</version>
 </parameters>
 """
 
@@ -25,10 +25,11 @@ import subprocess
 from Queue import Queue
 from functools import wraps
 from collections import deque
+from xml.etree import ElementTree
 from datetime import datetime, date, timedelta
 from __builtin__ import object as py_object
 
-VERSION = {"TITLE": "trassir_script_framework", "VERSION": 0.3}
+VERSION = {"TITLE": "trassir_script_framework", "VERSION": 0.4}
 
 # _SERVICE_VERSION = 0.42
 tbot_service = """
@@ -472,7 +473,7 @@ class BaseUtils:
     """Base utils for your scripts"""
 
     _host_api = host
-    _folders = {obj[1]: obj[3] for obj in host.objects_list("Folder")}
+    _FOLDERS = {obj[1]: obj[3] for obj in host.objects_list("Folder")}
     _TEXT_FILE_EXTENSIONS = [".txt", ".csv", ".log"]
     _LPR_FLAG_BITS = {
         "LPR_UP": 0x00001,
@@ -487,6 +488,18 @@ class BaseUtils:
         "LPR_CORRECTED": 0x00040,
     }
     _HTML_IMG_TEMPLATE = """<img src="data:image/png;base64,{img}" {attr}>"""
+
+    _SCR_DEFAULT_NAMES = [
+        "Yeni skript",
+        "Unnamed Script",
+        "უსახელო სკრიპტი",
+        "Жаңа скрипт",
+        "Script nou",
+        "Новый скрипт",
+        "Yeni skript dosyası",
+        "Новий скрипт",
+        "未命名脚本",
+    ]
 
     def __init__(self):
         pass
@@ -925,7 +938,7 @@ class BaseUtils:
         if tr_obj is not None:
             for obj in cls._host_api.objects_list(""):
                 if tr_obj.guid == obj[1]:
-                    return "{}_{}".format(obj[1], cls._folders.get(obj[3], obj[3]))
+                    return "{}_{}".format(obj[1], cls._FOLDERS.get(obj[3], obj[3]))
 
     @classmethod
     def get_operator_gui(cls):
@@ -1094,6 +1107,50 @@ class BaseUtils:
             logger_.addHandler(file_handler)
 
         return logger_
+
+    @classmethod
+    def set_script_name(cls, fmt=None):
+        """Автоматически изменяет имя скрипта
+
+        Новое имя скрипта создается на основе `параметров
+        <https://www.dssl.ru/files/trassir/manual/ru/setup-script-parameters.html>`_
+        скрипта. По желанию можно изменить шаблон имени. По умолчанию
+        :obj:`"{company} - {title} v.{version}"`
+
+        Note:
+            Имя изменяется только если сейчас у скрипта стандартное имя,
+            например :obj:`"Новый скрипт"` или :obj:`"Unnamed Script"`
+
+        Args:
+            fmt (:obj:`str`, optional): Шаблон имени скрипта. По умолчанию :obj:`None`
+
+        Examples:
+            >>> BaseUtils.set_script_name()
+            'AATrubilin - trassir_script_framework v.0.3'
+
+            >>> BaseUtils.set_script_name(fmt="{title}")
+            'trassir_script_framework'
+        """
+        if __doc__:
+            if cls._host_api.stats().parent()["name"] in cls._SCR_DEFAULT_NAMES:
+                root = ElementTree.fromstring(__doc__)
+
+                company = root.find("company")
+                title = root.find("title")
+                version = root.find("version")
+
+                if fmt is None:
+                    fmt = "{company} - {title} v.{version}"
+
+                script_name = fmt.format(
+                    company="DSSL" if company is None else company.text,
+                    title="Script" if title is None else title.text,
+                    version="0.1" if version is None else version.text,
+                )
+
+                cls._host_api.stats().parent()["name"] = script_name
+
+                return script_name
 
 
 class Worker(threading.Thread):
@@ -4653,7 +4710,7 @@ class TelegramSender(Sender):
 
         Args:
             text (:obj:`str`): Текст сообщения.
-            tg_users (List[:obj:`str`], optional): Список id пользователей
+            tg_users (List[:obj:`int`], optional): Список id пользователей
                 telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
             clear_msg (:obj:`bool`, optional): Если :obj:`True` - добавляет
                 имя сервера и скрипта к сообщению. По умолчанию :obj:`False`
@@ -4668,7 +4725,7 @@ class TelegramSender(Sender):
             image_path (:obj:`str`): Полный путь до изображения
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
-            tg_users (List[:obj:`str`], optional): Список id пользователей
+            tg_users (List[:obj:`int`], optional): Список id пользователей
                 telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
         """
         if not os.path.isfile(image_path):
@@ -4685,7 +4742,7 @@ class TelegramSender(Sender):
                 файлов для отправки
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
-            tg_users (List[:obj:`str`], optional): Список id пользователей
+            tg_users (List[:obj:`int`], optional): Список id пользователей
                 telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
         """
         if isinstance(file_paths, str):
@@ -4861,6 +4918,12 @@ class FtpUploadTracker:
             )
 
 
+class FTPSenderError(SenderError):
+    """Raises with FTPSender errors"""
+
+    pass
+
+
 class FTPSender(Sender):
     """Класс для отправки файлов на ftp сервер
 
@@ -4937,9 +5000,12 @@ class FTPSender(Sender):
 
     def _check_connection(self):
         """Check if it possible to connect"""
-        ftp = ftplib.FTP()
-        ftp.connect(self._host, self._port, timeout=10)
-        ftp.login(self._user, self._passwd)
+        try:
+            ftp = ftplib.FTP()
+            ftp.connect(self._host, self._port, timeout=10)
+            ftp.login(self._user, self._passwd)
+        except ftplib.all_errors as err:
+            raise FTPSenderError(err)
         if self._work_dir:
             try:
                 ftp.cwd(self._work_dir)

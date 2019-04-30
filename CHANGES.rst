@@ -2,6 +2,19 @@
 Changelog
 =========
 
+Version 0.4
+===========
+*Released 2019-04-30*
+
+New Features
+
+- Added :meth:`trassir_script_framework.BaseUtils.set_script_name`
+
+Changes
+
+- Fix catch_request_exceptions in :class:`trassir_script_framework.HTTPRequester`
+- Add tg_users argument to :class:`trassir_script_framework.TelegramSender` methods
+
 Version 0.3
 ===========
 *Released 2019-04-26*
