@@ -4648,30 +4648,36 @@ class TelegramSender(Sender):
         super(TelegramSender, self).__init__()
         self._tbot_api = TBotAPI(telegram_ids)
 
-    def text(self, text):
+    def text(self, text, tg_users=None, clear_msg=False):
         """Отправка текстового сообщения
 
         Args:
             text (:obj:`str`): Текст сообщения.
+            tg_users (List[:obj:`str`], optional): Список id пользователей
+                telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
+            clear_msg (:obj:`bool`, optional): Если :obj:`True` - добавляет
+                имя сервера и скрипта к сообщению. По умолчанию :obj:`False`
         """
 
-        self._tbot_api.send_message(text)
+        self._tbot_api.send_message(text, tg_users=tg_users, clear_msg=clear_msg)
 
-    def image(self, image_path, text=""):
+    def image(self, image_path, text="", tg_users=None):
         """Отправка изображения
 
         Args:
             image_path (:obj:`str`): Полный путь до изображения
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
+            tg_users (List[:obj:`str`], optional): Список id пользователей
+                telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
         """
         if not os.path.isfile(image_path):
             self.text("Image not found: {}".format(image_path))
             return
 
-        self._tbot_api.send_image(image_path, caption=text)
+        self._tbot_api.send_image(image_path, caption=text, tg_users=tg_users)
 
-    def files(self, file_paths, text=""):
+    def files(self, file_paths, text="", tg_users=None):
         """Отправка файлов
 
         Args:
@@ -4679,17 +4685,20 @@ class TelegramSender(Sender):
                 файлов для отправки
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
+            tg_users (List[:obj:`str`], optional): Список id пользователей
+                telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
         """
         if isinstance(file_paths, str):
             file_paths = [file_paths]
 
-        if text:
-            self.text(text)
+        if text and len(file_paths) == 1:
+            self.text(text, tg_users=tg_users)
+            text = ""
 
         files_not_found_text = ""
         for path in file_paths:
             if os.path.isfile(BaseUtils.win_encode_path(path)):
-                self._tbot_api.send_document(path)
+                self._tbot_api.send_document(path, caption=text, tg_users=tg_users)
             else:
                 files_not_found_text += "\nFile not found: {}".format(path)
 
