@@ -1115,7 +1115,7 @@ class BaseUtils:
         Новое имя скрипта создается на основе `параметров
         <https://www.dssl.ru/files/trassir/manual/ru/setup-script-parameters.html>`_
         скрипта. По желанию можно изменить шаблон имени. По умолчанию
-        :obj:`"{company} - {title} v.{version}"`
+        :obj:`"[{company}] {title} v.{version}"`
 
         Note:
             Имя изменяется только если сейчас у скрипта стандартное имя,
@@ -1140,7 +1140,7 @@ class BaseUtils:
                 version = root.find("version")
 
                 if fmt is None:
-                    fmt = "{company} - {title} v.{version}"
+                    fmt = "[{company}] {title} v.{version}"
 
                 script_name = fmt.format(
                     company="DSSL" if company is None else company.text,
