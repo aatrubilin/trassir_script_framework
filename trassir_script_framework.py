@@ -1126,7 +1126,7 @@ class BaseUtils:
 
         Examples:
             >>> BaseUtils.set_script_name()
-            'AATrubilin - trassir_script_framework v.0.3'
+            '[AATrubilin] trassir_script_framework v.0.4'
 
             >>> BaseUtils.set_script_name(fmt="{title}")
             'trassir_script_framework'
