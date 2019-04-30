@@ -477,15 +477,12 @@ class BaseUtils:
     _LPR_FLAG_BITS = {
         "LPR_UP": 0x00001,
         "LPR_DOWN": 0x00002,
-
         "LPR_BLACKLIST": 0x00004,
         "LPR_WHITELIST": 0x00008,
         "LPR_INFO": 0x00010,
-
         "LPR_FIRST_LANE": 0x01000,
         "LPR_SECOND_LANE": 0x02000,
         "LPR_THIRD_LANE": 0x04000,
-
         "LPR_EXT_DB_ERROR": 0x00020,
         "LPR_CORRECTED": 0x00040,
     }
@@ -553,7 +550,9 @@ class BaseUtils:
                         cls._host_api.timeout(1, lambda: raise_exc(err))
 
                 t = threading.Thread(
-                    target=locked_fn if locked else unlocked_fn, args=args, kwargs=kwargs
+                    target=locked_fn if locked else unlocked_fn,
+                    args=args,
+                    kwargs=kwargs,
                 )
                 t.daemon = daemon
                 t.start()
@@ -573,9 +572,9 @@ class BaseUtils:
                 return func(self, *args, **kwargs)
             except urllib2.HTTPError as e:
                 return e.code, "HTTPError: {}".format(e.code)
-            except urllib2.URLError, e:
+            except urllib2.URLError as e:
                 return e.reason, "URLError: {}".format(e.reason)
-            except httplib.HTTPException, e:
+            except httplib.HTTPException as e:
                 return e, "HTTPException: {}".format(e)
             except ssl.SSLError as e:
                 return e.errno, "SSLError: {}".format(e)
@@ -668,7 +667,9 @@ class BaseUtils:
         Returns:
             :obj:`bool`: :obj:`True` если шаблон существует, иначе :obj:`False`
         """
-        if template_name in [tmpl_.name for tmpl_ in cls._host_api.settings("templates").ls()]:
+        if template_name in [
+            tmpl_.name for tmpl_ in cls._host_api.settings("templates").ls()
+        ]:
             return True
         return False
 
@@ -757,11 +758,7 @@ class BaseUtils:
             '{"now": "2019-04-02T18:01:33.881000"}'
         """
 
-        return json.dumps(
-            data,
-            default=cls._json_serializer,
-            **kwargs
-        )
+        return json.dumps(data, default=cls._json_serializer, **kwargs)
 
     @classmethod
     def lpr_flags_decode(cls, flags):
@@ -850,7 +847,9 @@ class BaseUtils:
         """
         html_img = cls._HTML_IMG_TEMPLATE.format(
             img=image_base64,
-            attr=" ".join('%s="%s"' % (key, value) for key, value in kwargs.iteritems()),
+            attr=" ".join(
+                '%s="%s"' % (key, value) for key, value in kwargs.iteritems()
+            ),
         )
         return html_img
 
@@ -996,12 +995,12 @@ class BaseUtils:
 
     @classmethod
     def get_logger(
-            cls,
-            name=None,
-            host_log="WARNING",
-            popup_log="ERROR",
-            file_log=None,
-            file_name=None,
+        cls,
+        name=None,
+        host_log="WARNING",
+        popup_log="ERROR",
+        file_log=None,
+        file_name=None,
     ):
         """Возвращает логгер с предустановленными хэндлерами
 
@@ -1099,6 +1098,7 @@ class BaseUtils:
 
 class Worker(threading.Thread):
     """Thread executing tasks from a given tasks queue"""
+
     def __init__(self, tasks):
         super(Worker, self).__init__()
         self.tasks = tasks
@@ -1116,6 +1116,7 @@ class Worker(threading.Thread):
 
 class ThreadPool:
     """Pool of threads consuming tasks from a queue"""
+
     def __init__(self, num_threads, callback=None, host_api=host):
         self._host_api = host_api
         self.tasks = Queue(num_threads)
@@ -1216,7 +1217,10 @@ class HTTPRequester(py_object):
         Returns:
             str: params string
         """
-        return "&".join("{key}={value}".format(key=key, value=value) for key, value in params.iteritems())
+        return "&".join(
+            "{key}={value}".format(key=key, value=value)
+            for key, value in params.iteritems()
+        )
 
     @staticmethod
     def _prepare_headers(headers):
@@ -1573,7 +1577,7 @@ class ShotSaver(py_object):
         return os.path.join(file_path, file_name)
 
     def _async_shot(
-            self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None,
+        self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None
     ):
         """Вызывает ``callback`` после сохнанения скриншота
 
@@ -1598,7 +1602,9 @@ class ShotSaver(py_object):
             shot_file = self.shot(
                 channel_full_guid, dt=dt, file_name=file_name, file_path=file_path
             )
-            if BaseUtils.is_file_exists(BaseUtils.win_encode_path(shot_file), self._AWAITING_FILE):
+            if BaseUtils.is_file_exists(
+                BaseUtils.win_encode_path(shot_file), self._AWAITING_FILE
+            ):
                 self._host_api.timeout(100, lambda: callback(True, shot_file))
                 break
         else:
@@ -1606,7 +1612,7 @@ class ShotSaver(py_object):
 
     @BaseUtils.run_as_thread_v2()
     def async_shot(
-            self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None
+        self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None
     ):
         """Вызывает ``callback`` после сохнанения скриншота
 
@@ -1623,7 +1629,13 @@ class ShotSaver(py_object):
             file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
             callback (:obj:`function`, optional): Callable function
         """
-        self._async_shot(channel_full_guid, dt=dt, file_name=file_name, file_path=file_path, callback=callback)
+        self._async_shot(
+            channel_full_guid,
+            dt=dt,
+            file_name=file_name,
+            file_path=file_path,
+            callback=callback,
+        )
 
     @BaseUtils.run_as_thread_v2()
     def pool_shot(self, shot_args, pool_size=10, end_callback=None):
@@ -1774,15 +1786,15 @@ class VideoExporter(py_object):
         self._check_queue()
 
     def _export(
-            self,
-            channel_full_guid,
-            dt_start,
-            dt_end=None,
-            duration=60,
-            prefer_substream=False,
-            file_name=None,
-            file_path=None,
-            callback=None,
+        self,
+        channel_full_guid,
+        dt_start,
+        dt_end=None,
+        duration=60,
+        prefer_substream=False,
+        file_name=None,
+        file_path=None,
+        callback=None,
     ):
         """Exporting file
 
@@ -1863,15 +1875,15 @@ class VideoExporter(py_object):
         )
 
     def export(
-            self,
-            channel_full_guid,
-            dt_start,
-            dt_end=None,
-            duration=60,
-            prefer_substream=False,
-            file_name=None,
-            file_path=None,
-            callback=None,
+        self,
+        channel_full_guid,
+        dt_start,
+        dt_end=None,
+        duration=60,
+        prefer_substream=False,
+        file_name=None,
+        file_path=None,
+        callback=None,
     ):
         """Запускает экспорт или добавляет задачу экспорта в очередь.
 
@@ -2274,9 +2286,7 @@ class BasicObject(py_object):
         for name in objects:
             strip_name = name.strip()
             if strip_name in names:
-                raise ParameterError(
-                    "Объект '{}' выбран несколько раз".format(name)
-                )
+                raise ParameterError("Объект '{}' выбран несколько раз".format(name))
             names.append(strip_name)
 
         return names
@@ -2356,13 +2366,13 @@ class ObjectFromSetting(BasicObject):
         return objects
 
     def _get_objects_from_settings(
-            self,
-            settings_path,
-            object_type,
-            object_names=None,
-            server_guid=None,
-            ban_empty_result=False,
-            sub_condition=None,
+        self,
+        settings_path,
+        object_type,
+        object_names=None,
+        server_guid=None,
+        ban_empty_result=False,
+        sub_condition=None,
     ):
         """Check if objects exists and returns list from _load_objects_from_settings
 
@@ -2536,10 +2546,10 @@ class Channels(ObjectFromSetting):
             if not zombie:
                 try:
                     return (
-                            1
-                            - self._host_api.settings(sett.cd("info")["grabber_path"])[
-                                "grabber_enabled"
-                            ]
+                        1
+                        - self._host_api.settings(sett.cd("info")["grabber_path"])[
+                            "grabber_enabled"
+                        ]
                     )
                 except KeyError:
                     return 1
@@ -3470,8 +3480,8 @@ class Persons(ObjectFromSetting):
         ts_now = int(time.time())
 
         if (
-                self._persons is None
-                or (ts_now - self._persons["update_ts"]) > self._PERSONS_UPDATE_TIMEOUT
+            self._persons is None
+            or (ts_now - self._persons["update_ts"]) > self._PERSONS_UPDATE_TIMEOUT
         ):
             self._update_persons_dict(timeout=timeout)
 
@@ -3551,8 +3561,10 @@ class Persons(ObjectFromSetting):
                 [folder.guid for folder in persons_folders], True, 0, 0, timeout
             )
         except AttributeError:
-            raise TrassirError("Данный функционал не поддерживается вашей сборкой Trassir. "
-                               "Попробуйте обновить ПО.")
+            raise TrassirError(
+                "Данный функционал не поддерживается вашей сборкой Trassir. "
+                "Попробуйте обновить ПО."
+            )
 
         if isinstance(persons, str):
             raise EnvironmentError(persons)
@@ -3626,12 +3638,12 @@ class ObjectFromList(BasicObject):
         return objects
 
     def _get_objects_from_list(
-            self,
-            object_type,
-            object_names=None,
-            server_guid=None,
-            ban_empty_result=False,
-            sub_condition=None,
+        self,
+        object_type,
+        object_names=None,
+        server_guid=None,
+        ban_empty_result=False,
+        sub_condition=None,
     ):
         """Check if objects exists and returns list from _load_objects_from_settings
 
@@ -4028,10 +4040,10 @@ class Borders(ObjectFromList):
             List[:class:`TrObject`]: Список объектов
         """
         all_borders = (
-                self.get_head()
-                + self.get_people()
-                + self.get_simt()
-                + self.get_deep_people()
+            self.get_head()
+            + self.get_people()
+            + self.get_simt()
+            + self.get_deep_people()
         )
 
         if names is None:
@@ -4570,7 +4582,7 @@ class EmailSender(Sender):
         """
         self.files([image_path], text=text, subject=subject)
 
-    def files(self, file_paths, text="", subject=None):
+    def files(self, file_paths, text="", subject=None, callback=None):
         """Отправка файлов
 
         Note:
@@ -4584,9 +4596,14 @@ class EmailSender(Sender):
                 По умолчанию :obj:`""`
             subject (:obj:`str`, optional): Новая тема сообщения.
                 По умолчанию :obj:`None`
+            callback (:obj:`function`, optional): Функция, которая вызывается после
+                отправки частей
         """
         if isinstance(file_paths, str):
             file_paths = [file_paths]
+
+        if callback is None:
+            callback = BaseUtils.do_nothing
 
         files_to_send = []
         for path in file_paths:
@@ -4599,6 +4616,7 @@ class EmailSender(Sender):
 
         for grouped_files in file_groups:
             self.text(text, subject=subject, attachments=grouped_files)
+            callback(grouped_files)
 
 
 class TelegramSender(Sender):
@@ -4630,30 +4648,36 @@ class TelegramSender(Sender):
         super(TelegramSender, self).__init__()
         self._tbot_api = TBotAPI(telegram_ids)
 
-    def text(self, text):
+    def text(self, text, tg_users=None, clear_msg=False):
         """Отправка текстового сообщения
 
         Args:
             text (:obj:`str`): Текст сообщения.
+            tg_users (List[:obj:`str`], optional): Список id пользователей
+                telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
+            clear_msg (:obj:`bool`, optional): Если :obj:`True` - добавляет
+                имя сервера и скрипта к сообщению. По умолчанию :obj:`False`
         """
 
-        self._tbot_api.send_message(text)
+        self._tbot_api.send_message(text, tg_users=tg_users, clear_msg=clear_msg)
 
-    def image(self, image_path, text=""):
+    def image(self, image_path, text="", tg_users=None):
         """Отправка изображения
 
         Args:
             image_path (:obj:`str`): Полный путь до изображения
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
+            tg_users (List[:obj:`str`], optional): Список id пользователей
+                telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
         """
         if not os.path.isfile(image_path):
             self.text("Image not found: {}".format(image_path))
             return
 
-        self._tbot_api.send_image(image_path, caption=text)
+        self._tbot_api.send_image(image_path, caption=text, tg_users=tg_users)
 
-    def files(self, file_paths, text=""):
+    def files(self, file_paths, text="", tg_users=None):
         """Отправка файлов
 
         Args:
@@ -4661,17 +4685,20 @@ class TelegramSender(Sender):
                 файлов для отправки
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
+            tg_users (List[:obj:`str`], optional): Список id пользователей
+                telegram для отправки отдельных сообщений. По умолчанию :obj:`None`
         """
         if isinstance(file_paths, str):
             file_paths = [file_paths]
 
-        if text:
-            self.text(text)
+        if text and len(file_paths) == 1:
+            self.text(text, tg_users=tg_users)
+            text = ""
 
         files_not_found_text = ""
         for path in file_paths:
             if os.path.isfile(BaseUtils.win_encode_path(path)):
-                self._tbot_api.send_document(path)
+                self._tbot_api.send_document(path, caption=text, tg_users=tg_users)
             else:
                 files_not_found_text += "\nFile not found: {}".format(path)
 
@@ -4879,14 +4906,14 @@ class FTPSender(Sender):
     """
 
     def __init__(
-            self,
-            host,
-            port=21,
-            user="anonymous",
-            passwd="",
-            work_dir=None,
-            callback=None,
-            queue_maxlen=1000,
+        self,
+        host,
+        port=21,
+        user="anonymous",
+        passwd="",
+        work_dir=None,
+        callback=None,
+        queue_maxlen=1000,
     ):
         super(FTPSender, self).__init__()
         self._host = host
