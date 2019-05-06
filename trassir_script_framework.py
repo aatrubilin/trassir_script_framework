@@ -883,8 +883,8 @@ class BaseUtils:
             >>> else:
             >>>     host.message("Object name is {0.name}".format(obj))
         """
-        if not isinstance(obj_id, str):
-            raise TypeError("Expected str, got '{}'".format(type(obj_id).__name__))
+        if not isinstance(obj_id, (str, unicode)):
+            raise TypeError("Expected str or unicode, got '{}'".format(type(obj_id).__name__))
         obj = cls._host_api.object(obj_id)
         try:
             obj.name
@@ -1520,7 +1520,7 @@ class ShotSaver(py_object):
         >>>     else:
         >>>         host.error("Ошибка сохранения скриншота <br>%s" % shot_path)
         >>>
-        >>> ss.async_shot(callback, "e80kgBLh_pV4ggECb")
+        >>> ss.async_shot("e80kgBLh_pV4ggECb", callback=callback)
         >>>
         >>> #Сохранение большого количества скриншотов с вызовом ``callback`` функции после выполнения
         >>> from datetime import datetime, timedelta
