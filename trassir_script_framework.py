@@ -487,6 +487,7 @@ class BaseUtils:
         "LPR_EXT_DB_ERROR": 0x00020,
         "LPR_CORRECTED": 0x00040,
     }
+    _IMAGE_EXT = [".png", ".jpg", ".jpeg", ".bmp"]
     _HTML_IMG_TEMPLATE = """<img src="data:image/png;base64,{img}" {attr}>"""
 
     _SCR_DEFAULT_NAMES = [
@@ -825,9 +826,9 @@ class BaseUtils:
             >>> BaseUtils.image_to_base64(open(r"manual\en\cloud-devices-16.png", "rb").read())
             'iVBORw0KGgoAAAANSUhEUgAAB1MAAAH0CAYAAABo5wRhAAAACXBIWXMAAC4jA...'
         """
-        root, ext = os.path.splitext(image)
+        _, ext = os.path.splitext(image)
 
-        if ext:
+        if ext.lower() in cls._IMAGE_EXT:
             image = cls.win_encode_path(image)
             if not BaseUtils.is_file_exists(image):
                 return ""
@@ -884,7 +885,9 @@ class BaseUtils:
             >>>     host.message("Object name is {0.name}".format(obj))
         """
         if not isinstance(obj_id, (str, unicode)):
-            raise TypeError("Expected str or unicode, got '{}'".format(type(obj_id).__name__))
+            raise TypeError(
+                "Expected str or unicode, got '{}'".format(type(obj_id).__name__)
+            )
         obj = cls._host_api.object(obj_id)
         try:
             obj.name
