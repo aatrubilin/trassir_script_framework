@@ -2,6 +2,19 @@
 Changelog
 =========
 
+Version 0.5
+===========
+*Released Future*
+
+New Features
+
+- Added :meth:`trassir_script_framework.BaseUtils.save_pkl`
+- Added :meth:`trassir_script_framework.BaseUtils.load_pkl`
+
+Changes
+
+- Fix ShotSaver examples
+
 Version 0.4
 ===========
 *Released 2019-04-30*

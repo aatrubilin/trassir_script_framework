@@ -13,6 +13,7 @@ import ssl
 import time
 import host
 import json
+import pickle
 import base64
 import ftplib
 import urllib
@@ -867,6 +868,71 @@ class BaseUtils:
         )
         return html_img
 
+    @staticmethod
+    def save_pkl(file_path, data):
+        """Сохраняет данные в `.pkl` файл
+
+        Args:
+            file_path (:obj:`str`): Путь до файла
+            data: Данные для сохранения
+
+        Returns:
+            :obj:`str`: Абсолютный путь до файла
+
+        Examples:
+            >>> data = {"key": "value"}
+            >>> BaseUtils.save_pkl("saved_data.pkl", data)
+            'D:\\DSSL\\Trassir-4.1-Client\\saved_data.pkl'
+
+        """
+        if not file_path.endswith(".pkl"):
+            file_path = file_path + ".pkl"
+
+        with open(file_path, 'wb') as opened_file:
+            pickle.dump(data, opened_file)
+
+        return os.path.abspath(file_path)
+
+    @staticmethod
+    def load_pkl(file_path, default_type=dict):
+        """Загружает данные из `.pkl` файла
+
+        Args:
+            file_path (:obj:`str`): Путь до файла
+            default_type (optional):
+                Тип данных, возвращаемый при неудачной загрузке данных из файла.
+                По умолчанию :obj:`dict`
+
+        Returns:
+            Данные из файла или :obj:`default_type()`
+
+        Examples:
+            >>> BaseUtils.load_pkl("fake_saved_data.pkl")
+            {}
+            >>> BaseUtils.load_pkl("fake_saved_data.pkl", default_type=list)
+            []
+            >>> BaseUtils.load_pkl("fake_saved_data.pkl", default_type=int)
+            0
+            >>> BaseUtils.load_pkl("fake_saved_data.pkl", default_type=str)
+            ''
+            >>> BaseUtils.load_pkl("saved_data.pkl")
+            {'key': 'value'}
+        """
+
+        if not file_path.endswith(".pkl"):
+            file_path = file_path + ".pkl"
+
+        data = default_type()
+
+        if os.path.isfile(file_path):
+            try:
+                with open(file_path, "rb") as opened_file:
+                    data = pickle.load(opened_file)
+            except (EOFError, IndexError, ValueError, TypeError):
+                """ dump file is empty or broken """
+
+        return data
+
     @classmethod
     def get_object(cls, obj_id):
         """Возвращает объект Trassir, если он доступен, иначе ``None``
@@ -1029,6 +1095,9 @@ class BaseUtils:
 
         По умолчанию ``host_log="WARNING"`` и ``popup_log="ERROR"``
 
+        Note:
+            Имя файла лога можно указать с расширение ".log" или без.
+
         See Also:
             `Logging levels на сайте docs.python.org
             <https://docs.python.org/2/library/logging.html#logging-levels>`_
@@ -1089,7 +1158,10 @@ class BaseUtils:
 
         if file_log:
             if file_name is None:
-                file_name = "{}.log".format(cls.get_script_name())
+                file_name = cls.get_script_name()
+
+            if not file_name.endswith(".log"):
+                file_name = "{}.log".format(file_name)
 
             file_path = os.path.join(cls.get_screenshot_folder(), file_name)
             file_path = cls.win_encode_path(file_path)
@@ -1118,18 +1190,18 @@ class BaseUtils:
         Новое имя скрипта создается на основе `параметров
         <https://www.dssl.ru/files/trassir/manual/ru/setup-script-parameters.html>`_
         скрипта. По желанию можно изменить шаблон имени. По умолчанию
-        :obj:`"{company} - {title} v.{version}"`
+        :obj:`"[{company}] {title} v{version}"`
 
         Note:
             Имя изменяется только если сейчас у скрипта стандартное имя,
-            например :obj:`"Новый скрипт"` или :obj:`"Unnamed Script"`
+            например :obj:`"Новый скрипт"` или :obj:`"Unnamed Script"` и др.
 
         Args:
             fmt (:obj:`str`, optional): Шаблон имени скрипта. По умолчанию :obj:`None`
 
         Examples:
             >>> BaseUtils.set_script_name()
-            'AATrubilin - trassir_script_framework v.0.3'
+            'AATrubilin - trassir_script_framework v0.4'
 
             >>> BaseUtils.set_script_name(fmt="{title}")
             'trassir_script_framework'
@@ -1143,7 +1215,7 @@ class BaseUtils:
                 version = root.find("version")
 
                 if fmt is None:
-                    fmt = "{company} - {title} v.{version}"
+                    fmt = "[{company}] {title} v{version}"
 
                 script_name = fmt.format(
                     company="DSSL" if company is None else company.text,
@@ -1511,40 +1583,6 @@ class ShotSaver(py_object):
         >>> # Сохранение скриншота с канала ``"e80kgBLh_pV4ggECb"``
         >>> ss.shot("e80kgBLh_pV4ggECb")
         '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
-        >>>
-        >>> #Сохранение скриншота с вызовом ``callback`` функции после выполнения
-        >>> def callback(success, shot_path):
-        >>>     # Пример callback функции
-        >>>     # Args:
-        >>>     #     success (bool): True если скриншот успешно сохранен, иначе False
-        >>>     #     shot_path (str): Полный путь до скриншота
-        >>>     if success:
-        >>>         host.message("Скриншот успешно сохранен<br>%s" % shot_path)
-        >>>     else:
-        >>>         host.error("Ошибка сохранения скриншота <br>%s" % shot_path)
-        >>>
-        >>> ss.async_shot("e80kgBLh_pV4ggECb", callback=callback)
-        >>>
-        >>> #Сохранение большого количества скриншотов с вызовом ``callback`` функции после выполнения
-        >>> from datetime import datetime, timedelta
-        >>>
-        >>> def end_callback():
-        >>>     host.message("Все скриншоты сохранены")
-        >>>
-        >>> channel_guid = "e80kgBLh_pV4ggECb"
-        >>> dt_now = datetime.now()
-        >>> dt_range = [dt_now - timedelta(minutes=10*i) for i in xrange(12)]
-        >>> dt_range
-        [datetime.datetime(2019, 4, 25, 9, 38, 9, 253000), datetime.datetime(2019, 4, 25, 9, 28, 9, 253000), ...]
-        >>> shot_args = []
-        >>> for dt in dt_range:
-        >>>     kwargs = {
-        >>>         "dt": dt,
-        >>>         "callback": callback,
-        >>>     }
-        >>>     shot_args.append(((channel_guid,), kwargs))
-        >>>
-        >>> ss.pool_shot(shot_args, pool_size=10, end_callback=end_callback)
     """
 
     _AWAITING_FILE = 5  # Time for check file function, sec
@@ -1566,7 +1604,7 @@ class ShotSaver(py_object):
         путь для сохранения скриншотов.
 
         Note:
-            По молчанию ``screenshots_folder``  =
+            По молчанию :obj:`screenshots_folder`  =
             :meth:`BaseUtils.get_screenshot_folder`
 
         Raises:
@@ -1588,11 +1626,10 @@ class ShotSaver(py_object):
         """Делает скриншот с указанного канала
 
         Note:
-            - ``dt=None`` делает скриншот за текущее время
-            - ``file_name=None`` сохраняет скриншот с именем по шаблону
-              ``"{name} (%Y.%m.%d %H-%M-%S).jpg"``, где ``{name}`` - имя канала
-            - ``file_path=None`` сохраняет скриншот с выбранного канала
-              в папку :attr:`~script_framework.ShotSaver.screenshots_folder`
+            По умолчанию:
+
+            - :obj:`dt=datetime.now()`
+            - :obj:`file_name="{name} (%Y.%m.%d %H-%M-%S).jpg"`, где ``{name}`` - имя канала
 
         Args:
             channel_full_guid (:obj:`str`): Полный guid анала. Например: ``"CFsuNBzt_pV4ggECb"``
@@ -1607,6 +1644,11 @@ class ShotSaver(py_object):
         Raises:
             ValueError: Если в guid канала отсутствует guid сервера
             TypeError: Если ``isinstance(dt, (datetime, date)) is False``
+
+        Examples:
+            >>> ss = ShotSaver()
+            >>> ss.shot("e80kgBLh_pV4ggECb")
+            '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
         """
         if "_" not in channel_full_guid:
             raise ValueError(
@@ -1674,7 +1716,8 @@ class ShotSaver(py_object):
     def async_shot(
         self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None
     ):
-        """Вызывает ``callback`` после сохнанения скриншота
+        """async_shot(channel_full_guid, dt=None, file_name=None, file_path=None, callback=None)
+        Вызывает ``callback`` после сохнанения скриншота
 
         * Метод работает в отдельном потоке
         * Вызывает функцию :meth:`ShotSaver.shot`
@@ -1688,6 +1731,24 @@ class ShotSaver(py_object):
             file_name (:obj:`str`, optional): Имя файла с расширением. По умолчанию :obj:`None`
             file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
             callback (:obj:`function`, optional): Callable function
+
+        Returns:
+            :obj:`threading.Thread`: Thread object
+
+        Examples:
+            >>> def callback(success, shot_path):
+            >>>     # Пример callback функции
+            >>>     # Args:
+            >>>     #     success (bool): True если скриншот успешно сохранен, иначе False
+            >>>     #     shot_path (str): Полный путь до скриншота
+            >>>     if success:
+            >>>         host.message("Скриншот успешно сохранен<br>%s" % shot_path)
+            >>>     else:
+            >>>         host.error("Ошибка сохранения скриншота <br>%s" % shot_path)
+            >>>
+            >>> ss = ShotSaver()
+            >>> ss.async_shot("e80kgBLh_pV4ggECb", callback=callback)
+            <Thread(Thread-76, started daemon 212)>
         """
         self._async_shot(
             channel_full_guid,
@@ -1699,7 +1760,8 @@ class ShotSaver(py_object):
 
     @BaseUtils.run_as_thread_v2()
     def pool_shot(self, shot_args, pool_size=10, end_callback=None):
-        """Сохраняет скриншоты по очереди.
+        """pool_shot(shot_args, pool_size=10, end_callback=None)
+        Сохраняет скриншоты по очереди.
 
         Одновременно в работе не более :obj:`pool_size` задачь.
         Вызывает ``callback`` после сохнанения всех скриншотов
@@ -1709,6 +1771,29 @@ class ShotSaver(py_object):
             shot_args (List[:obj:`tuple`]): Аргументы для функции async_shot
             pool_size (:obj:`int`, optional): Размер пула. По умолчанию :obj:`pool_size=10`
             end_callback (:obj:`function`, optional): Вызывается после сохранения всех скриншотов
+
+        Returns:
+            :obj:`threading.Thread`: Thread object
+
+        Examples:
+            >>> from datetime import datetime, timedelta
+            >>>
+            >>> def end_callback():
+            >>>     host.message("Все скриншоты сохранены")
+            >>>
+            >>> channel_guid = "e80kgBLh_pV4ggECb"
+            >>> dt_now = datetime.now()
+            >>> dt_range = [dt_now - timedelta(minutes=10*i) for i in xrange(12)]
+            >>> dt_range
+            [datetime.datetime(2019, 4, 25, 9, 38, 9, 253000), datetime.datetime(2019, 4, 25, 9, 28, 9, 253000), ...]
+            >>> shot_args = []
+            >>> for dt in dt_range:
+            >>>     kwargs = {"dt": dt}
+            >>>     shot_args.append(((channel_guid,), kwargs))
+            >>>
+            >>> ss = ShotSaver()
+            >>> ss.pool_shot(shot_args, pool_size=10, end_callback=end_callback)
+            <Thread(Thread-76, started daemon 212)>
         """
         pool = ThreadPool(pool_size, end_callback)
         for args, kwargs in shot_args:

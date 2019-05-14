@@ -41,6 +41,14 @@ base64_to_html_img
 ------------------
 .. automethod:: trassir_script_framework.BaseUtils.base64_to_html_img
 
+save_pkl
+--------
+.. automethod:: trassir_script_framework.BaseUtils.save_pkl
+
+load_pkl
+--------
+.. automethod:: trassir_script_framework.BaseUtils.load_pkl
+
 get_operator_gui
 ----------------
 .. automethod:: trassir_script_framework.BaseUtils.get_operator_gui
