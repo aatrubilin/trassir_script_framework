@@ -536,7 +536,6 @@ class BaseUtils:
             >>>
             >>>
             >>> run_count_timer()
-            >>>
         """
         lock = threading.Lock()
 
@@ -576,6 +575,35 @@ class BaseUtils:
             return run
 
         return wrapped
+
+    @staticmethod
+    def run_as_thread(fn):
+        """Декоратор для запуска функций в отдельном потоке.
+
+        Returns:
+            :obj:`threading.Thread`: Функция в отдельном потоке
+
+        Examples:
+            >>> import time
+            >>>
+            >>>
+            >>> @BaseUtils.run_as_thread
+            >>> def run_count_timer():
+            >>>     time.sleep(1)
+            >>>     host.stats()["run_count"] += 1
+            >>>
+            >>>
+            >>> run_count_timer()
+        """
+
+        @wraps(fn)
+        def run(*args, **kwargs):
+            t = threading.Thread(target=fn, args=args, kwargs=kwargs)
+            t.daemon = True
+            t.start()
+            return t
+
+        return run
 
     @staticmethod
     def catch_request_exceptions(func):
@@ -1208,11 +1236,14 @@ class BaseUtils:
         """
         if __doc__:
             if cls._host_api.stats().parent()["name"] in cls._SCR_DEFAULT_NAMES:
-                root = ElementTree.fromstring(__doc__)
+                try:
+                    root = ElementTree.fromstring(__doc__)
+                except ElementTree.ParseError:
+                    root = None
 
-                company = root.find("company")
-                title = root.find("title")
-                version = root.find("version")
+                company = root.find("company") if root else None
+                title = root.find("title") if root else None
+                version = root.find("version") if root else None
 
                 if fmt is None:
                     fmt = "[{company}] {title} v{version}"

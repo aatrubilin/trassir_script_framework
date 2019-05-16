@@ -1,9 +1,9 @@
 BaseUtils
 =========
 
-run_as_thread_v2
------------------
-.. automethod:: trassir_script_framework.BaseUtils.run_as_thread_v2
+run_as_thread
+-------------
+.. automethod:: trassir_script_framework.BaseUtils.run_as_thread
 
 win_encode_path
 ---------------
