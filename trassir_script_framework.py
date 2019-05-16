@@ -3,7 +3,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.4</version>
+    <version>0.5</version>
 </parameters>
 """
 
@@ -30,7 +30,7 @@ from xml.etree import ElementTree
 from datetime import datetime, date, timedelta
 from __builtin__ import object as py_object
 
-VERSION = {"TITLE": "trassir_script_framework", "VERSION": 0.4}
+VERSION = {"TITLE": "trassir_script_framework", "VERSION": 0.5}
 
 # _SERVICE_VERSION = 0.42
 tbot_service = """
@@ -888,7 +888,7 @@ class BaseUtils:
         if not file_path.endswith(".pkl"):
             file_path = file_path + ".pkl"
 
-        with open(file_path, 'wb') as opened_file:
+        with open(file_path, "wb") as opened_file:
             pickle.dump(data, opened_file)
 
         return os.path.abspath(file_path)
@@ -2083,7 +2083,7 @@ class TemplateError(ScriptError):
     pass
 
 
-class Template(py_object):
+class GUITemplate(py_object):
     """Класс для работы с шаблонами Trassir
 
     При инициализации находит существующий шаблон по имени или создает новый.
@@ -2097,9 +2097,10 @@ class Template(py_object):
             Используйте данный класс на свой страх и риск!
 
     Tip:
-        Для понимания, как формируется контент шаблон отредактируйте любой
-        шаблон вручную и посмотрите что получится скрытых настройках трассира
-        (активируются нажатием клавиши F4 в настройках трассира) `Настройки/Шабоны/<Имя шаблона>/content`
+        Для понимания, как формируется контент отредактируйте любой шаблон
+        вручную и посмотрите что получится в скрытых параметрах трассира
+        (активируются нажатием клавиши F4 в настройках трассира)
+        `Настройки/Шабоны/<Имя шаблона>/content`
 
         Ниже предсталвены некоторые примеры шаблонов
 
@@ -2208,6 +2209,14 @@ class Template(py_object):
             self._template_settings["content"] = value
         else:
             raise TypeError("Expected str, got {}".format(type(value).__name__))
+
+    def delete(self):
+        """Удаляет шаблон"""
+        obj = BaseUtils.get_object(self.guid)
+        if obj is None:
+            raise TemplateError("Template object not found!")
+
+        obj.delete_template()
 
     def show(self, monitor=1):
         """Открывает шаблон на указаном мониторе
@@ -3543,6 +3552,47 @@ class Users(ObjectFromSetting):
             object_names=None,
             server_guid=self.server_guid,
             sub_condition=sub_condition,
+        )
+
+
+class Templates(ObjectFromSetting):
+    """Класс для работы с существующими шаблонами.
+
+    Args:
+        server_guid (:obj:`str` | List[:obj:`str`], optional): Guid сервера или список guid.
+            По умолчанию :obj:`None`, что соотвествует всем доступным серверам.
+
+    Examples:
+        >>> templates = Templates(BaseUtils.get_server_guid())
+        >>> templates.get_all()
+        [TrObject('Parking'), TrObject('FR'), TrObject('AT'), TrObject('AD+')]
+    """
+
+    def __init__(self, server_guid=None):
+        super(Templates, self).__init__()
+        if server_guid is None:
+            server_guid = [srv.guid for srv in Servers().get_all()]
+
+        self.server_guid = server_guid
+
+    def get_all(self, names=None):
+        """Возвращает список шаблонов
+
+        Args:
+            names (:obj:`str` | :obj:`list`, optional): :obj:`str` - имена,
+                разделенные запятыми или :obj:`list` - список имен.
+                По умолчанию :obj:`None`
+
+        Returns:
+            List[:class:`TrObject`]: Список объектов
+        """
+
+        return self._get_objects_from_settings(
+            "/{server_guid}/templates",
+            "Template",
+            object_names=names,
+            server_guid=self.server_guid,
+            sub_condition=None,
         )
 
 

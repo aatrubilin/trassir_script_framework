@@ -1,4 +1,4 @@
-Template
-========
-.. autoclass:: trassir_script_framework.Template
+GUITemplate
+===========
+.. autoclass:: trassir_script_framework.GUITemplate
     :members:
