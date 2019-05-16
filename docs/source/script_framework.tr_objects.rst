@@ -18,6 +18,11 @@ Users
 .. autoclass:: trassir_script_framework.Users
     :members:
 
+Templates
+---------
+.. autoclass:: trassir_script_framework.Templates
+    :members:
+
 PosTerminals
 ------------
 .. autoclass:: trassir_script_framework.PosTerminals

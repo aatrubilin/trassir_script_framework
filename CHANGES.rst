@@ -2,6 +2,24 @@
 Changelog
 =========
 
+Version 0.5
+===========
+*Released 2019-05-16*
+
+New Features
+
+- Added :meth:`trassir_script_framework.BaseUtils.save_pkl`
+- Added :meth:`trassir_script_framework.BaseUtils.load_pkl`
+- Added :class:`trassir_script_framework.Templates`
+- Added :meth:`trassir_script_framework.GUITemplate.delete`
+
+Changes
+
+- Fix ShotSaver examples
+- Rename Template to :class:`trassir_script_framework.GUITemplate`
+- Fix some errors in :meth:`trassir_script_framework.BaseUtils.image_to_base64`
+- Add extension to file_log in :meth:`trassir_script_framework.BaseUtils.get_logger`
+
 Version 0.4
 ===========
 *Released 2019-04-30*
