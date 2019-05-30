@@ -506,6 +506,7 @@ class BaseUtils:
     def __init__(self):
         pass
 
+    # noinspection PyUnusedLocal
     @staticmethod
     def do_nothing(*args, **kwargs):
         """Ничего не делает.
@@ -543,6 +544,7 @@ class BaseUtils:
             @wraps(fn)
             def run(*args, **kwargs):
                 def raise_exc(err):
+                    # noinspection PyShadowingNames
                     args = list(err.args)
                     args[0] = "[{}]: {}".format(fn.__name__, args[0])
                     err.args = args
@@ -642,7 +644,10 @@ class BaseUtils:
             True
         """
         if os.name == "nt":
-            path = path.decode("utf8").encode("cp1251")
+            try:
+                path = path.decode("utf8").encode("cp1251")
+            except UnicodeDecodeError:
+                pass
 
         return path
 
@@ -667,11 +672,12 @@ class BaseUtils:
             >>> BaseUtils.is_file_exists("_t1server.settings")
             True
         """
-        if os.path.isfile(file_path):
+        file_path_encoded = BaseUtils.win_encode_path(file_path)
+        if os.path.isfile(file_path) or os.path.isfile(file_path_encoded):
             return True
         for x in xrange(tries - 1):
             time.sleep(1)
-            if os.path.isfile(file_path):
+            if os.path.isfile(file_path) or os.path.isfile(file_path_encoded):
                 return True
         return False
 
@@ -802,6 +808,25 @@ class BaseUtils:
         """
 
         return json.dumps(data, default=cls._json_serializer, **kwargs)
+
+    @staticmethod
+    def ts_to_datetime(ts):
+        """Конвертирует timestamp в :obj:`datetime` объект
+
+        Args:
+            ts (:obj:`int`): Timestamp
+
+        Returns:
+            :obj:`datetime`: Datetime объект
+        """
+        if ts > 1e10:
+            ts_sec = int(ts / 1e6)
+            ts_ms = int(ts - ts_sec * 1e6)
+        else:
+            ts_sec = int(ts)
+            ts_ms = 0
+
+        return datetime.fromtimestamp(ts_sec) + timedelta(microseconds=ts_ms)
 
     @classmethod
     def lpr_flags_decode(cls, flags):
@@ -1149,6 +1174,7 @@ class BaseUtils:
             >>> logger = BaseUtils.get_logger()
             >>> logger.warning("My warning message")
             >>> try:
+            >>>     # noinspection PyUnresolvedReferences
             >>>     do_something()
             >>> except NameError:
             >>>     logger.error("Function is not defined", exc_info=True)
@@ -1212,7 +1238,7 @@ class BaseUtils:
         return logger_
 
     @classmethod
-    def set_script_name(cls, fmt=None):
+    def set_script_name(cls, fmt=None, script_name=None):
         """Автоматически изменяет имя скрипта
 
         Новое имя скрипта создается на основе `параметров
@@ -1226,6 +1252,8 @@ class BaseUtils:
 
         Args:
             fmt (:obj:`str`, optional): Шаблон имени скрипта. По умолчанию :obj:`None`
+            script_name (:obj:`str`, optional): Имя скрипта. Если не задано - парсит
+                имя из параметров. По умолчанию :obj:`None`
 
         Examples:
             >>> BaseUtils.set_script_name()
@@ -1234,16 +1262,19 @@ class BaseUtils:
             >>> BaseUtils.set_script_name(fmt="{title}")
             'trassir_script_framework'
         """
-        if __doc__:
-            if cls._host_api.stats().parent()["name"] in cls._SCR_DEFAULT_NAMES:
+        if cls._host_api.stats().parent()["name"] in cls._SCR_DEFAULT_NAMES:
+            if script_name is None:
                 try:
                     root = ElementTree.fromstring(__doc__)
                 except ElementTree.ParseError:
                     root = None
 
-                company = root.find("company") if root else None
-                title = root.find("title") if root else None
-                version = root.find("version") if root else None
+                if root is None:
+                    company, title, version = None, None, None
+                else:
+                    company = root.find("company") if root else None
+                    title = root.find("title") if root else None
+                    version = root.find("version") if root else None
 
                 if fmt is None:
                     fmt = "[{company}] {title} v{version}"
@@ -1254,9 +1285,9 @@ class BaseUtils:
                     version="0.1" if version is None else version.text,
                 )
 
-                cls._host_api.stats().parent()["name"] = script_name
+            cls._host_api.stats().parent()["name"] = script_name
 
-                return script_name
+            return script_name
 
 
 class Worker(threading.Thread):
@@ -1767,6 +1798,7 @@ class ShotSaver(py_object):
             :obj:`threading.Thread`: Thread object
 
         Examples:
+            >>> # noinspection PyUnresolvedReferences
             >>> def callback(success, shot_path):
             >>>     # Пример callback функции
             >>>     # Args:
@@ -1855,6 +1887,7 @@ class VideoExporter(py_object):
         | Экспорт видео с вызовом ``callback`` функции после выполнения.
         | Начало экспорта - 120 секунд назад, продолжительность 60 сек.
 
+        >>> # noinspection PyUnresolvedReferences
         >>> def callback(success, file_path, channel_full_guid):
         >>>     # Пример callback функции
         >>>     # Args:
@@ -4698,7 +4731,7 @@ class PopupWithBtnSender(Sender):
 
 
 class EmailSender(Sender):
-    """Класс для отправки уведомлений, изображений и файлоа на почту
+    """Класс для отправки уведомлений, изображений и файлов на почту
 
     Note:
         По умолчанию тема сообщений соответствует шаблону
@@ -4833,7 +4866,7 @@ class EmailSender(Sender):
 
         files_to_send = []
         for path in file_paths:
-            if os.path.isfile(BaseUtils.win_encode_path(path)):
+            if BaseUtils.is_file_exists(path):
                 files_to_send.append(path)
             else:
                 text += "\nFile not found: {}".format(path)
@@ -5071,6 +5104,7 @@ class FtpUploadTracker:
         self.file_path = file_path
         self.callback = callback
 
+    # noinspection PyUnusedLocal
     def handle(self, block):
         """Handler for storbinary
 
@@ -5119,6 +5153,7 @@ class FTPSender(Sender):
             По умолчанию :obj:`queue_maxlen=1000`
 
     Examples:
+        >>> # noinspection PyUnresolvedReferences
         >>> def callback(file_path, progress, error):
         >>>     # Пример callback функции, которая отображает
         >>>     # текущий прогресс в счетчике запуска скрипта
