@@ -2,6 +2,16 @@
 Changelog
 =========
 
+Version 0.6
+===========
+*Released 2019-07-05*
+
+Changes
+
+- Fix :meth:`trassir_script_framework.BaseUtils.win_encode_path`
+- Update tbot_api
+- Other fixes
+
 Version 0.5
 ===========
 *Released 2019-05-16*
