@@ -32,6 +32,8 @@ from __builtin__ import object as py_object
 
 VERSION = {"TITLE": "trassir_script_framework", "VERSION": 0.5}
 
+logger = logging.getLogger()
+
 # _SERVICE_VERSION = 0.42
 tbot_service = """
     gLWD0ijmpExPrfkb6th7Xs5Exglx4CBh25ciS4Ur31hMJp+hMn09vOQOOnTav/cLXx2foczX
@@ -1712,6 +1714,14 @@ class ShotSaver(py_object):
             >>> ss.shot("e80kgBLh_pV4ggECb")
             '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
         """
+        logger.debug(
+            "ShotSaver.shot({channel_full_guid}, dt={dt}, file_name={file_name}, file_path={file_path})".format(
+                channel_full_guid=repr(channel_full_guid),
+                dt=repr(dt),
+                file_name=repr(file_name),
+                file_path=repr(file_path),
+            )
+        )
         if "_" not in channel_full_guid:
             raise ValueError(
                 "Expected full channel guid, got {}".format(channel_full_guid)
@@ -1774,7 +1784,7 @@ class ShotSaver(py_object):
         else:
             self._host_api.timeout(100, lambda: callback(False, shot_file))
 
-    @BaseUtils.run_as_thread_v2()
+    @BaseUtils.run_as_thread
     def async_shot(
         self, channel_full_guid, dt=None, file_name=None, file_path=None, callback=None
     ):
@@ -1821,7 +1831,7 @@ class ShotSaver(py_object):
             callback=callback,
         )
 
-    @BaseUtils.run_as_thread_v2()
+    @BaseUtils.run_as_thread
     def pool_shot(self, shot_args, pool_size=10, end_callback=None):
         """pool_shot(shot_args, pool_size=10, end_callback=None)
         Сохраняет скриншоты по очереди.
@@ -4780,10 +4790,19 @@ class EmailSender(Sender):
 
         self._subject_default = subject or self._generate_subject()
 
+        logger.info(
+            "EmailSender({}, {}, subject={}, max_size={})".format(
+                repr(account),
+                repr(mailing_list),
+                repr(self._subject_default),
+                repr(self.max_size),
+            )
+        )
+
     def _generate_subject(self):
         """Returns `server name` -> `script name`"""
         subject = "{server_name} -> {script_name}".format(
-            server_name=self._host_api.settings("").name,
+            server_name=self._host_api.settings("").name or "Client",
             script_name=self._host_api.stats().parent()["name"],
         )
         return subject
@@ -4858,6 +4877,7 @@ class EmailSender(Sender):
             callback (:obj:`function`, optional): Функция, которая вызывается после
                 отправки частей
         """
+        logger.debug("EmailSender.files({}, text={})".format(repr(file_paths), repr(text)))
         if isinstance(file_paths, str):
             file_paths = [file_paths]
 
@@ -4874,6 +4894,7 @@ class EmailSender(Sender):
         file_groups = self._group_files_by_max_size(files_to_send, self.max_size)
 
         for grouped_files in file_groups:
+            logger.debug("EmailSender.files: grouped_files: {}".format(repr(grouped_files)))
             self.text(text, subject=subject, attachments=grouped_files)
             callback(grouped_files)
 
@@ -5271,7 +5292,7 @@ class FTPSender(Sender):
                 "STOR " + file_name, opened_file, 1024, upload_tracker.handle
             )
 
-    @BaseUtils.run_as_thread_v2()
+    @BaseUtils.run_as_thread
     def _sender(self):
         """Send files in queue"""
         if self.queue:
