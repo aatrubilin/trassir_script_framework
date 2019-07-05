@@ -5101,6 +5101,8 @@ class TelegramSender(Sender):
         telegram_ids (:obj:`str`): Id пользователей, через запятую.
 
     Examples:
+        >>> # Можно указать id для рассылки при инициализации
+        >>> # класса, для всех уведомлений
         >>> sender = TelegramSender("123456789")
         >>> sender.text("Hello World!")
 
@@ -5114,6 +5116,7 @@ class TelegramSender(Sender):
 
             .. image:: images/telegram_sender.files.png
 
+        >>> # Или можно опередовать telegram id при вызове методов
         >>> sender = TelegramSender()
         >>> sender.text("Hello World!", tg_users=[123456789])
 
