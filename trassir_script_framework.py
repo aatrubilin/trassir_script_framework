@@ -590,8 +590,6 @@ import mimetools, mimetypes, itertools
 
 logger = logging.getLogger()
 
-host.exec_encoded(tbot_service)
-
 
 class ScriptError(Exception):
     """Base script exception"""
@@ -5133,6 +5131,7 @@ class TelegramSender(Sender):
 
     def __init__(self, telegram_ids=None):
         super(TelegramSender, self).__init__()
+        self._host_api.exec_encoded(tbot_service)
         self._tbot_api = TBotAPI()
         if telegram_ids is not None:
             self.telegram_ids = TBotAPI.prepare_users(telegram_ids)

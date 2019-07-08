@@ -2,6 +2,15 @@
 Changelog
 =========
 
+Version 0.7
+===========
+*Released future*
+
+Changes
+
+- Exec encoded tbot_service in TelegramSender __init__
+
+
 Version 0.6
 ===========
 *Released 2019-07-05*
