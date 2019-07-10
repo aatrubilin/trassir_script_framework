@@ -1860,7 +1860,7 @@ class ShotSaver(py_object):
             метода :obj:`pool_shot`. После вызовет :obj:`RuntimeError`
 
         Raises:
-            RuntimeError: Если пул уже созда.
+            RuntimeError: Если пул уже создан.
         """
         return self._pool_size
 
@@ -1877,7 +1877,7 @@ class ShotSaver(py_object):
 
         Возвращает текущий размер очереди в пуле.
 
-        Notes:
+        Note:
             Если пул еще не был созда (метод :obj:`pool_shot`
             не вызывался) данный метод вернет :obj:`-1`
         """
@@ -2067,10 +2067,10 @@ class ShotSaver(py_object):
         """pool_shot(channel_full_guid, dt=None, file_name=None, file_path=None, callback=None)
         Сохраняет скриншоты в пуле.
 
-        Одновременно в работе не более :obj:`Saver.pool_size` задач.
+        Одновременно в работе не более :obj:`ShotSaver.pool_size` задач.
 
         Warnings:
-            Данный метод создает :obj:`Saver.pool_size` доп. потоков.
+            Данный метод создает :obj:`ShotSaver.pool_size` доп. потоков.
             Потоки удаляются при отключении скрипта.
 
         Args:
