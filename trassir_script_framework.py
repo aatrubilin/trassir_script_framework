@@ -3,7 +3,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.6</version>
+    <version>0.61</version>
 </parameters>
 """
 
@@ -595,7 +595,14 @@ logger = logging.getLogger()
 class ScriptError(Exception):
     """Base script exception"""
 
-    pass
+    _host_api = host
+
+    def __init__(self, *args):
+        super(ScriptError, self).__init__(*args)
+        self._host_api.timeout(1, self.rise_from_thread)
+
+    def rise_from_thread(self):
+        raise self
 
 
 class HostLogHandler(logging.Handler):
@@ -1818,7 +1825,6 @@ class ShotSaverError(ScriptError):
 
 
 class ShotSaver(py_object):
-    # noinspection PyUnresolvedReferences
     """Класс для сохранения скриншотов
 
         Args:
@@ -1827,24 +1833,6 @@ class ShotSaver(py_object):
                 Если в течении времени `shot_awaiting_time` скриншот не был сохранен - производится
                 следующая попытка сохранить скриншот. По умолчанию :obj:`2`
             pool_size (:obj:`int`): Размер пула. По умолчанию :obj:`10`
-
-        Attributes:
-            pool_size (:obj:`int`): Размер пула. По умолчанию :obj:`10`
-            pool_queue_size (:obj:`int`): Размер текущей очереди в пуле.
-
-        Examples:
-
-            >>> ss = ShotSaver()
-            >>> # Смена папки сохранения скриншотов по умолчанию
-            >>> ss.screenshots_folder
-            '/home/trassir/shots'
-            >>> ss.screenshots_folder += "/my_shots"
-            >>> ss.screenshots_folder
-            '/home/trassir/shots/my_shots'
-            >>>
-            >>> # Сохранение скриншота с канала ``"e80kgBLh_pV4ggECb"``
-            >>> ss.shot("e80kgBLh_pV4ggECb")
-            '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
         """
 
     _SHOT_NAME_TEMPLATE = (
@@ -1862,6 +1850,18 @@ class ShotSaver(py_object):
 
     @property
     def pool_size(self):
+        """:obj:`int`: Размер пула для метода :obj:`pool_shot`
+
+        Устанавливает размер пула (кол-во одновременно созданных задач
+        сохранения скриншотов). По умолчанию :obj:`10`.
+
+        Warnings:
+            Изменить данный параметр можно только до первого вызова
+            метода :obj:`pool_shot`. После вызовет :obj:`RuntimeError`
+
+        Raises:
+            RuntimeError: Если пул уже созда.
+        """
         return self._pool_size
 
     @pool_size.setter
@@ -1873,6 +1873,14 @@ class ShotSaver(py_object):
 
     @property
     def pool_queue_size(self):
+        """:obj:`int`: Размер текущей очереди в пуле
+
+        Возвращает текущий размер очереди в пуле.
+
+        Notes:
+            Если пул еще не был созда (метод :obj:`pool_shot`
+            не вызывался) данный метод вернет :obj:`-1`
+        """
         if self._thread_pool is None:
             return -1
         else:
@@ -3355,6 +3363,54 @@ class Schedules(ObjectFromSetting):
             server_guid = [srv.guid for srv in Servers().get_all()]
 
         self.server_guid = server_guid
+
+    @BaseUtils.run_as_thread
+    def on_load(self, schedule_name, callback, tries=5):
+        """on_load(schedule_name, callback, tries=5)
+        Вызывает `callback` после загрузки расписания
+
+        Note:
+            При загрузке сервера, объект расписания становится не сразу доступен.
+            Данный метод помогает предотвратить данную ошибку.
+
+        Args:
+            schedule_name (:obj:`str`): Имя расписания
+            callback (:obj:`function`): Функция, которая вызывается после
+                загрузки расписания.
+            tries (:obj:`int`, optional): Кол-во попыток загрузки расписания.
+                Каждая попытка производится с интервалом 1 с. По умолчанию :obj:`5`
+
+        Examples
+            >>> schedule = None
+            >>> # noinspection PyGlobalUndefined,PyUnresolvedReferences
+            >>> def on_schedule_loaded(schedule_obj):
+            >>>     global schedule
+            >>>     schedule = schedule_obj
+            >>>
+            >>>     message("Schedule '{obj.name}' ({obj.guid}) loaded".format(obj=schedule))
+            >>>     schedule.activate_on_state_changes(lambda: alert(schedule.state("color")))
+            >>>
+            >>> Schedules().on_load("Unnamed Schedule", on_schedule_loaded)
+        """
+        if not schedule_name:
+            raise ParameterError("Empty schedule name")
+
+        tmp_server_guid = self.server_guid
+        self.server_guid = BaseUtils.get_server_guid()
+
+        while tries:
+            obj = self.get_enabled(schedule_name)[0].obj
+
+            if obj is None:
+                tries -= 1
+                time.sleep(1)
+            else:
+                self.server_guid = tmp_server_guid
+                self._host_api.timeout(1, lambda: callback(obj))
+                break
+        else:
+            self.server_guid = tmp_server_guid
+            raise ScriptError("Ошибка получения объекта расписания '{}'".format(schedule_name))
 
     def get_enabled(self, names=None):
         """Возвращает список активных расписаний
