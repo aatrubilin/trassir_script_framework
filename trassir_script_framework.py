@@ -3,7 +3,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.6</version>
+    <version>0.61</version>
 </parameters>
 """
 
@@ -595,7 +595,14 @@ logger = logging.getLogger()
 class ScriptError(Exception):
     """Base script exception"""
 
-    pass
+    _host_api = host
+
+    def __init__(self, *args):
+        super(ScriptError, self).__init__(*args)
+        self._host_api.timeout(1, self.rise_from_thread)
+
+    def rise_from_thread(self):
+        raise self
 
 
 class HostLogHandler(logging.Handler):
@@ -3355,6 +3362,53 @@ class Schedules(ObjectFromSetting):
             server_guid = [srv.guid for srv in Servers().get_all()]
 
         self.server_guid = server_guid
+
+    @BaseUtils.run_as_thread
+    def on_load(self, schedule_name, callback, tries=5):
+        """Вызывает `callback` после загрузки расписания
+
+        Note:
+            При загрузке сервера, объект расписания становится не сразу доступен.
+            Данный метод помогает предотвратить данную ошибку.
+
+        Args:
+            schedule_name (:obj:`str`): Имя расписания
+            callback (:obj:`function`): Функция, которая вызывается после
+                загрузки расписания.
+            tries (:obj:`int`, optional): Кол-во попыток загрузки расписания.
+                Каждая попытка производится с интервалом 1 с. По умолчанию :obj:`5`
+
+        Examples
+            >>> schedule = None
+            >>> # noinspection PyGlobalUndefined,PyUnresolvedReferences
+            >>> def on_schedule_loaded(schedule_obj):
+            >>>     global schedule
+            >>>     schedule = schedule_obj
+            >>>
+            >>>     message("Schedule '{obj.name}' ({obj.guid}) loaded".format(obj=schedule))
+            >>>     schedule.activate_on_state_changes(lambda: alert(schedule.state("color")))
+            >>>
+            >>> Schedules().on_load("Unnamed Schedule", on_schedule_loaded)
+        """
+        if not schedule_name:
+            raise ParameterError("Empty schedule name")
+
+        tmp_server_guid = self.server_guid
+        self.server_guid = BaseUtils.get_server_guid()
+
+        while tries:
+            obj = self.get_enabled(schedule_name)[0].obj
+
+            if obj is None:
+                tries -= 1
+                time.sleep(1)
+            else:
+                self.server_guid = tmp_server_guid
+                self._host_api.timeout(1, lambda: callback(obj))
+                break
+        else:
+            self.server_guid = tmp_server_guid
+            raise ScriptError("Ошибка получения объекта расписания '{}'".format(schedule_name))
 
     def get_enabled(self, names=None):
         """Возвращает список активных расписаний
