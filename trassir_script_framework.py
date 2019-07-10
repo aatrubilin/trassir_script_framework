@@ -561,6 +561,7 @@ tbot_service = """
 
 import re
 import os
+import sys
 import ssl
 import time
 import host
@@ -1482,30 +1483,31 @@ class Worker(threading.Thread):
 
     def __init__(self, tasks):
         super(Worker, self).__init__()
+        alert("START WORKER")
         self.tasks = tasks
         self.daemon = True
         self.start()
 
     def run(self):
-        while True:
-            func, args, kargs = self.tasks.get()
-            try:
-                func(*args, **kargs)
-            finally:
-                self.tasks.task_done()
+        while __name__ in sys.modules.keys():
+            if not self.tasks.empty():
+                func, args, kwargs = self.tasks.get(timeout=1)
+                # noinspection PyBroadException
+                try:
+                    func(*args, **kwargs)
+                except:
+                    logger.exception("ThreadPool Worker error")
+                finally:
+                    self.tasks.task_done()
 
 
 class ThreadPool:
     """Pool of threads consuming tasks from a queue"""
 
-    def __init__(self, num_threads, callback=None, host_api=host):
+    def __init__(self, num_threads, host_api=host):
         self._host_api = host_api
-        self.tasks = Queue(num_threads)
-        for _ in xrange(num_threads):
-            Worker(self.tasks)
-        if callback is None:
-            callback = BaseUtils.do_nothing
-        self.callback = callback
+        self.tasks = Queue()
+        self.workers = [Worker(self.tasks) for _ in xrange(num_threads)]
 
     def add_task(self, func, *args, **kargs):
         """Add a task to the queue"""
@@ -1514,7 +1516,6 @@ class ThreadPool:
     def wait_completion(self):
         """Wait for completion of all the tasks in the queue"""
         self.tasks.join()
-        self._host_api.timeout(1000, self.callback)
 
 
 class HTTPRequester(py_object):
@@ -1817,32 +1818,65 @@ class ShotSaverError(ScriptError):
 
 
 class ShotSaver(py_object):
+    # noinspection PyUnresolvedReferences
     """Класс для сохранения скриншотов
 
-    Examples:
+        Args:
+            shot_awaiting_time (:obj:`int`, optional): Время ожидания скриншота, с. По умолчанию :obj:`5`.
+            tries_to_make_shot (:obj:`int`, optional): Кол-во попыток сохранить скриншот.
+                Если в течении времени `shot_awaiting_time` скриншот не был сохранен - производится
+                следующая попытка сохранить скриншот. По умолчанию :obj:`2`
+            pool_size (:obj:`int`): Размер пула. По умолчанию :obj:`10`
 
-        >>> ss = ShotSaver()
-        >>> # Смена папки сохранения скриншотов по умолчанию
-        >>> ss.screenshots_folder
-        '/home/trassir/shots'
-        >>> ss.screenshots_folder += "/my_shots"
-        >>> ss.screenshots_folder
-        '/home/trassir/shots/my_shots'
-        >>>
-        >>> # Сохранение скриншота с канала ``"e80kgBLh_pV4ggECb"``
-        >>> ss.shot("e80kgBLh_pV4ggECb")
-        '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
-    """
+        Attributes:
+            pool_size (:obj:`int`): Размер пула. По умолчанию :obj:`10`
+            pool_queue_size (:obj:`int`): Размер текущей очереди в пуле.
 
-    _AWAITING_FILE = 5  # Time for check file function, sec
+        Examples:
+
+            >>> ss = ShotSaver()
+            >>> # Смена папки сохранения скриншотов по умолчанию
+            >>> ss.screenshots_folder
+            '/home/trassir/shots'
+            >>> ss.screenshots_folder += "/my_shots"
+            >>> ss.screenshots_folder
+            '/home/trassir/shots/my_shots'
+            >>>
+            >>> # Сохранение скриншота с канала ``"e80kgBLh_pV4ggECb"``
+            >>> ss.shot("e80kgBLh_pV4ggECb")
+            '/home/trassir/shots/AC-D2141IR3 Склад (2019.04.03 15-58-26).jpg'
+        """
+
     _SHOT_NAME_TEMPLATE = (
         "{name} (%Y.%m.%d %H-%M-%S).jpg"
     )  # Template for shot file name
-    _ASYNC_SHOT_TRIES = 2  # Tries to make shot in async_shot method
 
-    def __init__(self, host_api=host):
+    def __init__(self, shot_awaiting_time=5, tries_to_make_shot=2, pool_size=10, host_api=host):
+        self._shot_awaiting_time = shot_awaiting_time
+        self._tries_to_make_shot = tries_to_make_shot
+        self._thread_pool = None
+        self._pool_size = pool_size
+
         self._host_api = host_api
         self._screenshots_folder = BaseUtils.get_screenshot_folder()
+
+    @property
+    def pool_size(self):
+        return self._pool_size
+
+    @pool_size.setter
+    def pool_size(self, value):
+        if self._thread_pool is None:
+            self._pool_size = value
+        else:
+            raise RuntimeError("You can't change pool size when workers created")
+
+    @property
+    def pool_queue_size(self):
+        if self._thread_pool is None:
+            return -1
+        else:
+            return self._thread_pool.tasks.qsize()
 
     @property
     def screenshots_folder(self):
@@ -1957,12 +1991,12 @@ class ShotSaver(py_object):
             callback = BaseUtils.do_nothing
 
         shot_file = ""
-        for _ in xrange(self._ASYNC_SHOT_TRIES):
+        for _ in xrange(self._tries_to_make_shot):
             shot_file = self.shot(
                 channel_full_guid, dt=dt, file_name=file_name, file_path=file_path
             )
             if BaseUtils.is_file_exists(
-                BaseUtils.win_encode_path(shot_file), self._AWAITING_FILE
+                BaseUtils.win_encode_path(shot_file), self._shot_awaiting_time
             ):
                 self._host_api.timeout(100, lambda: callback(True, shot_file))
                 break
@@ -1987,7 +2021,8 @@ class ShotSaver(py_object):
                 По умолчанию :obj:`None`
             file_name (:obj:`str`, optional): Имя файла с расширением. По умолчанию :obj:`None`
             file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
-            callback (:obj:`function`, optional): Callable function
+            callback (:obj:`function`, optional): Функциюя, которая вызывается после сохранения скриншота.
+                В качестве аргументов должна принимать `success`, `shot_path`. По умолчанию :obj:`None`
 
         Returns:
             :obj:`threading.Thread`: Thread object
@@ -2006,7 +2041,6 @@ class ShotSaver(py_object):
             >>>
             >>> ss = ShotSaver()
             >>> ss.async_shot("e80kgBLh_pV4ggECb", callback=callback)
-            <Thread(Thread-76, started daemon 212)>
         """
         self._async_shot(
             channel_full_guid,
@@ -2017,47 +2051,46 @@ class ShotSaver(py_object):
         )
 
     @BaseUtils.run_as_thread
-    def pool_shot(self, shot_args, pool_size=10, end_callback=None):
-        """pool_shot(shot_args, pool_size=10, end_callback=None)
-        Сохраняет скриншоты по очереди.
+    def _pool_awaiting(self):
+        self._thread_pool.wait_completion()
 
-        Одновременно в работе не более :obj:`pool_size` задачь.
-        Вызывает ``callback`` после сохнанения всех скриншотов
-        см. :meth:`ShotSaver.async_shot`
+    # noinspection PyIncorrectDocstring
+    def pool_shot(self, *args, **kwargs):
+        """pool_shot(channel_full_guid, dt=None, file_name=None, file_path=None, callback=None)
+        Сохраняет скриншоты в пуле.
+
+        Одновременно в работе не более :obj:`Saver.pool_size` задач.
+
+        Warnings:
+            Данный метод создает :obj:`Saver.pool_size` доп. потоков.
+            Потоки удаляются при отключении скрипта.
 
         Args:
-            shot_args (List[:obj:`tuple`]): Аргументы для функции async_shot
-            pool_size (:obj:`int`, optional): Размер пула. По умолчанию :obj:`pool_size=10`
-            end_callback (:obj:`function`, optional): Вызывается после сохранения всех скриншотов
-
-        Returns:
-            :obj:`threading.Thread`: Thread object
+            channel_full_guid (:obj:`str`): Полный guid канала. Например: ``"CFsuNBzt_pV4ggECb"``
+            dt (:obj:`datetime.datetime`, optional): :obj:`datetime.datetime` для скриншота.
+                По умолчанию :obj:`None`
+            file_name (:obj:`str`, optional): Имя файла с расширением. По умолчанию :obj:`None`
+            file_path (:obj:`str`, optional): Путь для сохранения скриншота. По умолчанию :obj:`None`
+            callback (:obj:`function`, optional): Функциюя, которая вызывается после сохранения скриншота.
+                В качестве аргументов должна принимать `success`, `shot_path`. По умолчанию :obj:`None`
 
         Examples:
-            >>> from datetime import datetime, timedelta
-            >>>
-            >>> def end_callback():
-            >>>     host.message("Все скриншоты сохранены")
-            >>>
-            >>> channel_guid = "e80kgBLh_pV4ggECb"
-            >>> dt_now = datetime.now()
-            >>> dt_range = [dt_now - timedelta(minutes=10*i) for i in xrange(12)]
-            >>> dt_range
-            [datetime.datetime(2019, 4, 25, 9, 38, 9, 253000), datetime.datetime(2019, 4, 25, 9, 28, 9, 253000), ...]
-            >>> shot_args = []
-            >>> for dt in dt_range:
-            >>>     kwargs = {"dt": dt}
-            >>>     shot_args.append(((channel_guid,), kwargs))
-            >>>
+
             >>> ss = ShotSaver()
-            >>> ss.pool_shot(shot_args, pool_size=10, end_callback=end_callback)
-            <Thread(Thread-76, started daemon 212)>
+            >>> ss.pool_size = 2
+            >>>
+            >>> ss.pool_shot("e80kgBLh_pV4ggECb")
+            >>> ss.pool_shot("e80kgBLh_pV4ggECb")
+            >>> ss.pool_shot("e80kgBLh_pV4ggECb")
+            >>> ss.pool_shot("e80kgBLh_pV4ggECb")
+            >>>
+            >>> ss.pool_queue_size
+            4
         """
-        pool = ThreadPool(pool_size, end_callback)
-        for args, kwargs in shot_args:
-            pool.add_task(self._async_shot, *args, **kwargs)
-        pool.wait_completion()
-        return pool
+        if self._thread_pool is None:
+            self._thread_pool = ThreadPool(self._pool_size)
+
+        self._thread_pool.add_task(self._async_shot, *args, **kwargs)
 
 
 class VideoExporterError(ScriptError):
@@ -5414,6 +5447,7 @@ class FTPSender(Sender):
         >>> sender.files(r"D:\Shots\export_video.avi")
     """
 
+    # noinspection SpellCheckingInspection,PyShadowingNames
     def __init__(
         self,
         host,
