@@ -581,8 +581,9 @@ from Queue import Queue
 from functools import wraps
 from collections import deque
 from xml.etree import ElementTree
-from datetime import datetime, date, timedelta
 from __builtin__ import object as py_object
+from datetime import datetime, date, timedelta
+from logging.handlers import RotatingFileHandler
 
 
 """import for tbot_service"""
@@ -606,7 +607,7 @@ class ScriptError(Exception):
 
 
 class HostLogHandler(logging.Handler):
-    """ Trassir main log handler """
+    """Trassir main log handler"""
 
     def __init__(self, host_api=host):
         super(HostLogHandler, self).__init__()
@@ -618,7 +619,7 @@ class HostLogHandler(logging.Handler):
 
 
 class PopupHandler(logging.Handler):
-    """ Trassir popup handler """
+    """Trassir popup handler"""
 
     def __init__(self, host_api=host):
         super(PopupHandler, self).__init__()
@@ -636,32 +637,38 @@ class PopupHandler(logging.Handler):
 
     def emit(self, record):
         msg = self.format(record)
-        popup = self._popups.get(record.levelname, self._host_api.message)
-        popup(msg)
+        self._popups[record.levelname](msg)
 
 
-class MyFileHandler(logging.Handler):
-    """ My file handler """
+class DuplicateFilter(logging.Filter):
+    """Suppressing multiple messages with same content.
 
-    def __init__(self, file_path, max_mbytes=10240):
-        super(MyFileHandler, self).__init__()
-        self._file_path = file_path
-        self._max_mbytes = max_mbytes * 1024
+    Tracking last logged record and filter out any
+    repeated (similar) records. Output something more rsyslog style.
+    
+    Example:
+        --- The last message repeated 3 times
+    """
 
-    def _check_size(self):
-        if not os.path.isfile(self._file_path):
-            return
-        if os.stat(self._file_path).st_size > self._max_mbytes:
-            old_file_path = self._file_path + ".old"
-            if os.path.isfile(old_file_path):
-                os.remove(old_file_path)
-            os.rename(self._file_path, old_file_path)
+    def __init__(self):
+        super(DuplicateFilter, self).__init__()
+        self._last_log = None
+        self._last_log_count = 1
 
-    def emit(self, record):
-        self._check_size()
-        msg = self.format(record)
-        with open(self._file_path, "a") as log_file:
-            log_file.write(msg + "\n")
+    def filter(self, record):
+        record.duplicates = ""
+        current_log = (record.module, record.levelno, record.msg)
+        if current_log == self._last_log:
+            self._last_log_count += 1
+            return False
+        else:
+            if self._last_log_count > 1:
+                record.duplicates = (
+                    "--- The last message repeated %s times\n" % self._last_log_count
+                )
+            self._last_log = current_log
+            self._last_log_count = 1
+            return True
 
 
 class BaseUtils:
@@ -1326,11 +1333,12 @@ class BaseUtils:
     @classmethod
     def get_logger(
         cls,
-        name=None,
         host_log="WARNING",
         popup_log="ERROR",
         file_log=None,
         file_name=None,
+        file_max_bytes=5*1024*1024,
+        file_backup_count=2,
     ):
         """Возвращает логгер с предустановленными хэндлерами
 
@@ -1351,8 +1359,6 @@ class BaseUtils:
             <https://docs.python.org/2/library/logging.html#logging-levels>`_
 
         Args:
-            name (:obj:`str`, optional): Имя логгера, должно быть уникальным для
-                каждого скрипта. По умолчанию :obj:`None`, и равно guid скрипта.
             host_log (:obj:`str`, optional): Уровень логирования в основной лог.
                 По умолчанию ``"WARNING"``
             popup_log (:obj:`str`, optional): Уровень логирования во всплывающих
@@ -1361,6 +1367,10 @@ class BaseUtils:
                 По умолчанию :obj:`None`
             file_name (:obj:`str`, optional): Имя файла для логирования.
                 По умолчанию :obj:`None` и равно ``<имени скрипта>.log``
+            file_max_bytes (:obj:`int`, optional): Максимальный размер файла лога
+                в байтах. По умолчанию :obj:`5 * 1024 * 1024`
+            file_backup_count (:obj:`int`, optional): Макссимальное кол-во бэкапов лога.
+                По умолчанию :obj:`2`
 
         Returns:
             :obj:`logging.logger`: Логгер
@@ -1374,25 +1384,23 @@ class BaseUtils:
             >>> except NameError:
             >>>     logger.error("Function is not defined", exc_info=True)
         """
-        logger_ = logging.getLogger(name or __name__)
+        logger_ = logging.getLogger(__name__)
         logger_.setLevel("DEBUG")
 
-        if logger_.handlers:
+        def _remove_handlers():
+            """Close and remove handlers on disable script"""
             for handler in logger_.handlers[:]:
                 handler.close()
                 logger_.removeHandler(handler)
 
+        cls._host_api.register_finalizer(_remove_handlers)
+
         if host_log:
             host_handler = HostLogHandler()
             host_handler.setLevel(host_log)
-            if name:
-                host_formatter = logging.Formatter(
-                    "[%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(name)s: %(message)s"
-                )
-            else:
-                host_formatter = logging.Formatter(
-                    "[%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(message)s"
-                )
+            host_formatter = logging.Formatter(
+                "[%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(message)s"
+            )
             host_handler.setFormatter(host_formatter)
             logger_.addHandler(host_handler)
 
@@ -1415,19 +1423,14 @@ class BaseUtils:
             file_path = os.path.join(cls.get_screenshot_folder(), file_name)
             file_path = cls.win_encode_path(file_path)
 
-            file_handler = MyFileHandler(file_path)
+            file_handler = RotatingFileHandler(file_path, maxBytes=file_max_bytes, backupCount=file_backup_count)
             file_handler.setLevel(file_log)
-            if name:
-                file_formatter = logging.Formatter(
-                    fmt="%(asctime)s [%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(name)s: %(message)s",
-                    datefmt="%Y/%m/%d %H:%M:%S",
-                )
-            else:
-                file_formatter = logging.Formatter(
-                    fmt="%(asctime)s [%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(message)s",
-                    datefmt="%Y/%m/%d %H:%M:%S",
-                )
+            file_formatter = logging.Formatter(
+                fmt="%(duplicates)s%(asctime)s [%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(message)s",
+                datefmt="%Y/%m/%d %H:%M:%S",
+            )
             file_handler.setFormatter(file_formatter)
+            file_handler.addFilter(DuplicateFilter())
             logger_.addHandler(file_handler)
 
         return logger_
@@ -1839,7 +1842,9 @@ class ShotSaver(py_object):
         "{name} (%Y.%m.%d %H-%M-%S).jpg"
     )  # Template for shot file name
 
-    def __init__(self, shot_awaiting_time=5, tries_to_make_shot=2, pool_size=10, host_api=host):
+    def __init__(
+        self, shot_awaiting_time=5, tries_to_make_shot=2, pool_size=10, host_api=host
+    ):
         self._shot_awaiting_time = shot_awaiting_time
         self._tries_to_make_shot = tries_to_make_shot
         self._thread_pool = None
@@ -3410,7 +3415,9 @@ class Schedules(ObjectFromSetting):
                 break
         else:
             self.server_guid = tmp_server_guid
-            raise ScriptError("Ошибка получения объекта расписания '{}'".format(schedule_name))
+            raise ScriptError(
+                "Ошибка получения объекта расписания '{}'".format(schedule_name)
+            )
 
     def get_enabled(self, names=None):
         """Возвращает список активных расписаний
