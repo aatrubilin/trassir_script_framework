@@ -689,6 +689,54 @@ class BaseUtils:
         "LPR_EXT_DB_ERROR": 0x00020,
         "LPR_CORRECTED": 0x00040,
     }
+    _EVENT_STR_TO_INT = {
+        "Border Crossed A -> B": -2010220362,
+        "Border Crossed B -> A": 881900680,
+        "Border %1 A-B Crossing": 1745631458,
+        "Border %1 B-A Crossing": 1382034490,
+        "Border %1 Unique Object A-B Crossing": -1764400102,
+        "Border %1 Unique Object B-A Crossing": -755097134,
+        "Connected To %1 under %2": -567223767,
+        "Connection Established": 1689573124,
+        "Connection Lost": -1739961019,
+        "Deny: %1 (%2)": 1400866841,
+        "Disconnected From %1": 854687023,
+        "FACS Connected": 928164014,
+        "FACS Disconnected": -528751441,
+        "Face Detected": -145480902,
+        "Face Recognized": 1904675878,
+        "Fire Detected": -2095846277,
+        "Fire Stopped": 1556160195,
+        "HDD Broken": -359176531,
+        "HDD Error": -2035571413,
+        "HDD Restored": 2054776042,
+        "Health Turns Bad": -1338064969,
+        "Health Turns Good": 1737407416,
+        "Input High to Low": 1260011944,
+        "Input Low to High": 108469542,
+        "Login Failed, %1 from %2": -1785217387,
+        "Login Successful, %1 from %2": 1634136664,
+        "Logout, %1 from %2": 334348171,
+        "Motion Start": -1960416690,
+        "Motion Stop": 452886769,
+        "No Connection to Cloud": -1220531757,
+        "Object Entered the Zone": -1484834142,
+        "Object Left the Zone": 1838034845,
+        "Output High to Low": -994975116,
+        "Output Low to High": 842360770,
+        "Pass: %1 (%2)": 1944146750,
+        "Photo Detected": -220640968,
+        "Script: %1": 865778551,
+        "Shutdown": 390175606,
+        "Signal Lost": -997068283,
+        "Signal Restored": -1801421619,
+        "Slow Down Detected": -438590449,
+        "Software update to version %1 succeeded": 1188419157,
+        "Startup": -37228692,
+        "Tracked Object Left Zone %1": 456308509,
+        "Tracked Unique Object Entered Zone %1": -1766980008,
+    }
+    _EVENT_INT_TO_STR = {v: k for k, v in _EVENT_STR_TO_INT.iteritems()}
     _IMAGE_EXT = [".png", ".jpg", ".jpeg", ".bmp"]
     _HTML_IMG_TEMPLATE = """<img src="data:image/png;base64,{img}" {attr}>"""
 
@@ -1067,6 +1115,54 @@ class BaseUtils:
         return [bit for bit, code in cls._LPR_FLAG_BITS.iteritems() if (flags & code)]
 
     @classmethod
+    def event_type_encode(cls, event_type):
+        """Преобразует тип события :obj:`str` -> :obj:`int`
+
+        Note:
+            События в БД хранятся в :obj:`int`, в скриптах
+            приходят в человекочитаемом, строковом формате.
+
+        Args:
+            event_type (:obj:`str`): Тип события как в скриптах.
+
+        Examples:
+            >>> BaseUtils.event_type_encode("Border Crossed A -> B")
+            -2010220362
+
+        Returns:
+            :obj:`int`: Тип события как в БД
+        """
+        if not isinstance(event_type, str):
+            raise TypeError(
+                "Expected str, got {}".format(type(event_type).__name__)
+            )
+        return cls._EVENT_STR_TO_INT.get(event_type)
+
+    @classmethod
+    def event_type_decode(cls, event_type):
+        """Преобразует тип события :obj:`int` -> :obj:`str`
+
+        Note:
+            События в БД хранятся в :obj:`int`, в скриптах
+            приходят в человекочитаемом, строковом формате.
+
+        Args:
+            event_type (:obj:`int`): Тип события как в БД.
+
+        Examples:
+            >>> BaseUtils.event_type_encode(-2010220362)
+            "Border Crossed A -> B"
+
+        Returns:
+            :obj:`str`: Тип события как в скриптах
+        """
+        if not isinstance(event_type, int):
+            raise TypeError(
+                "Expected int, got {}".format(type(event_type).__name__)
+            )
+        return cls._EVENT_INT_TO_STR.get(event_type)
+
+    @classmethod
     def image_to_base64(cls, image):
         """Создает base64 из изображения
 
@@ -1337,7 +1433,7 @@ class BaseUtils:
         popup_log="ERROR",
         file_log=None,
         file_name=None,
-        file_max_bytes=5*1024*1024,
+        file_max_bytes=5 * 1024 * 1024,
         file_backup_count=2,
     ):
         """Возвращает логгер с предустановленными хэндлерами
@@ -1423,7 +1519,9 @@ class BaseUtils:
             file_path = os.path.join(cls.get_screenshot_folder(), file_name)
             file_path = cls.win_encode_path(file_path)
 
-            file_handler = RotatingFileHandler(file_path, maxBytes=file_max_bytes, backupCount=file_backup_count)
+            file_handler = RotatingFileHandler(
+                file_path, maxBytes=file_max_bytes, backupCount=file_backup_count
+            )
             file_handler.setLevel(file_log)
             file_formatter = logging.Formatter(
                 fmt="%(duplicates)s%(asctime)s [%(levelname)-8s] %(lineno)-4s <%(funcName)s> - %(message)s",

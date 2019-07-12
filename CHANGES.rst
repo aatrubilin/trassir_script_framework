@@ -2,14 +2,21 @@
 Changelog
 =========
 
-Version 0.7
+Version 0.61
 ===========
-*Released future*
+*Released 2019-07-12*
+
+New Features
+
+- Added :meth:`trassir_script_framework.Schedules.on_load`
+- Added :meth:`trassir_script_framework.BaseUtils.event_type_encode`
+- Added :meth:`trassir_script_framework.BaseUtils.event_type_decode`
 
 Changes
 
 - Exec encoded tbot_service in TelegramSender __init__
-
+- Rebuild :meth:`trassir_script_framework.ShotSaver.pool_shot`
+- Rebuild :meth:`trassir_script_framework.BaseUtils.get_logger`
 
 Version 0.6
 ===========
