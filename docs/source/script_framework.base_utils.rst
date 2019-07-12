@@ -31,11 +31,19 @@ to_json
 
 ts_to_datetime
 --------------
-.. automethod:: trassir_script_framework.BaseUtils.to_json
+.. automethod:: trassir_script_framework.BaseUtils.ts_to_datetime
 
 lpr_flags_decode
 ----------------
-.. automethod:: trassir_script_framework.BaseUtils.ts_to_datetime
+.. automethod:: trassir_script_framework.BaseUtils.lpr_flags_decode
+
+event_type_encode
+-----------------
+.. automethod:: trassir_script_framework.BaseUtils.event_type_encode
+
+event_type_decode
+-----------------
+.. automethod:: trassir_script_framework.BaseUtils.event_type_decode
 
 image_to_base64
 ---------------
