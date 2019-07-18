@@ -725,11 +725,6 @@ from __builtin__ import object as py_object
 from datetime import datetime, date, timedelta
 from logging.handlers import RotatingFileHandler
 
-
-"""import for tbot_service"""
-# noinspection PyUnresolvedReferences
-import mimetools, mimetypes, itertools
-
 logger = logging.getLogger()
 
 
@@ -5178,6 +5173,42 @@ class PokaYoke(py_object):
             )
 
         return phones
+
+    @classmethod
+    def fire_recognizer_events(cls, enable=True, server_guid=None):
+        """Проверяет "Режим для СКУД" настроек распознавания лиц.
+
+        По умолчанию проверяет активирован ли "Режим для СКУД"
+        на сервере, где запущен скрипт. По желанию можно указать
+        удаленный сервер дял проверки.
+
+        Args:
+            enable (:obj:`bool`, optional): Состояние параметра. По умолчанию :obj:`True`.
+            server_guid (:obj:`str`, optional): Guid сервера. По умолчанию :obj:`None`.
+
+        Raises:
+            RuntimeError: Если указанный сервер недоступен.
+            EnvironmentError: Если моудль распознавания или режим для СКУД не доступны.
+            TrassirError: Если текущее состояние не соотвествует необходимомому.
+        """
+        if server_guid is None:
+            server_guid = BaseUtils.get_server_guid()
+
+        try:
+            srv_sett = cls._host_api.settings("/%s" % server_guid)
+        except KeyError:
+            raise RuntimeError("Сервер '%s' не доступен" % server_guid)
+
+        fr_sett = srv_sett.cd("face_recognizer")
+
+        if fr_sett is None:
+            raise EnvironmentError("Модуль распознавания лиц не доступен на '%s'" % (srv_sett.name or srv_sett.guid))
+
+        try:
+            if fr_sett["fire_recognizer_events"] != enable:
+                raise TrassirError("Пожалуйста, {} 'Режим для СКУД' в настройках распознавания лиц".format("активируйте" if enable else "отключите"))
+        except KeyError:
+            raise EnvironmentError("'Режим для СКУД' не доступен. Пожалуйста, обновите сервер trassir.")
 
 
 class SenderError(Exception):
