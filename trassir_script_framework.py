@@ -1736,14 +1736,16 @@ class Worker(threading.Thread):
 
     def __init__(self, tasks):
         super(Worker, self).__init__()
-        alert("START WORKER")
         self.tasks = tasks
         self.daemon = True
         self.start()
 
+        self.task_working = False
+
     def run(self):
         while __name__ in sys.modules.keys():
             if not self.tasks.empty():
+                self.task_working = True
                 func, args, kwargs = self.tasks.get(timeout=1)
                 # noinspection PyBroadException
                 try:
@@ -1752,6 +1754,8 @@ class Worker(threading.Thread):
                     logger.exception("ThreadPool Worker error")
                 finally:
                     self.tasks.task_done()
+            else:
+                self.task_working = False
 
 
 class ThreadPool:
@@ -1761,6 +1765,13 @@ class ThreadPool:
         self._host_api = host_api
         self.tasks = Queue()
         self.workers = [Worker(self.tasks) for _ in xrange(num_threads)]
+
+    @property
+    def working(self):
+        for worker in self.workers:
+            if worker.task_working:
+                return True
+        return False
 
     def add_task(self, func, *args, **kargs):
         """Add a task to the queue"""
@@ -2133,6 +2144,19 @@ class ShotSaver(py_object):
             return -1
         else:
             return self._thread_pool.tasks.qsize()
+
+    @property
+    def pool_working(self):
+        """:obj:`bool`: :obj:`True` если в пуле есть не законченные задачи
+
+        Note:
+            Если пул еще не был созда (метод :obj:`pool_shot`
+            не вызывался) данный метод вернет :obj:`None`
+        """
+        if self._thread_pool is None:
+            return None
+        else:
+            return self._thread_pool.working
 
     @property
     def screenshots_folder(self):
@@ -5203,13 +5227,22 @@ class PokaYoke(py_object):
         fr_sett = srv_sett.cd("face_recognizer")
 
         if fr_sett is None:
-            raise EnvironmentError("Модуль распознавания лиц не доступен на '%s'" % (srv_sett.name or srv_sett.guid))
+            raise EnvironmentError(
+                "Модуль распознавания лиц не доступен на '%s'"
+                % (srv_sett.name or srv_sett.guid)
+            )
 
         try:
             if fr_sett["fire_recognizer_events"] != enable:
-                raise TrassirError("Пожалуйста, {} 'Режим для СКУД' в настройках распознавания лиц".format("активируйте" if enable else "отключите"))
+                raise TrassirError(
+                    "Пожалуйста, {} 'Режим для СКУД' в настройках распознавания лиц".format(
+                        "активируйте" if enable else "отключите"
+                    )
+                )
         except KeyError:
-            raise EnvironmentError("'Режим для СКУД' не доступен. Пожалуйста, обновите сервер trassir.")
+            raise EnvironmentError(
+                "'Режим для СКУД' не доступен. Пожалуйста, обновите сервер trassir."
+            )
 
 
 class SenderError(Exception):
