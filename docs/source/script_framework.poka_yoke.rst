@@ -30,3 +30,7 @@ check_phones
 ------------
 .. automethod:: trassir_script_framework.PokaYoke.check_phones
 
+fire_recognizer_events
+----------------------
+.. automethod:: trassir_script_framework.PokaYoke.fire_recognizer_events
+

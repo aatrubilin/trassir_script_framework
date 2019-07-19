@@ -917,8 +917,8 @@ class BaseUtils:
             >>>
             >>> @BaseUtils.run_as_thread_v2()
             >>> def run_count_timer():
-            >>>     time.sleep(1)
-            >>>     host.stats()["run_count"] += 1
+            ...     time.sleep(1)
+            ...     host.stats()["run_count"] += 1
             >>>
             >>>
             >>> run_count_timer()
@@ -976,8 +976,8 @@ class BaseUtils:
             >>>
             >>> @BaseUtils.run_as_thread
             >>> def run_count_timer():
-            >>>     time.sleep(1)
-            >>>     host.stats()["run_count"] += 1
+            ...     time.sleep(1)
+            ...     host.stats()["run_count"] += 1
             >>>
             >>>
             >>> run_count_timer()
@@ -1127,7 +1127,8 @@ class BaseUtils:
 
         Examples:
             >>> BaseUtils.cat("/home/trassir/ Trassir 3 License.txt")
-        .. image:: images/base_utils.cat.png
+
+                .. image:: images/base_utils.cat.png
 
         Raises:
             :class:`TypeError`: Если ``check_ext=True`` расширение файла нет в списке :obj:`_TEXT_FILE_EXTENSIONS`
@@ -1441,9 +1442,9 @@ class BaseUtils:
         Examples:
             >>> obj = BaseUtils.get_object("EZJ4QnbC")
             >>> if obj is None:
-            >>>     host.error("Object not found")
-            >>> else:
-            >>>     host.message("Object name is {0.name}".format(obj))
+            ...     host.error("Object not found")
+            ... else:
+            ...     host.message("Object name is {0.name}".format(obj))
         """
         if not isinstance(obj_id, (str, unicode)):
             raise TypeError(
@@ -1619,10 +1620,10 @@ class BaseUtils:
             >>> logger = BaseUtils.get_logger()
             >>> logger.warning("My warning message")
             >>> try:
-            >>>     # noinspection PyUnresolvedReferences
-            >>>     do_something()
-            >>> except NameError:
-            >>>     logger.error("Function is not defined", exc_info=True)
+            ...     # noinspection PyUnresolvedReferences
+            ...     do_something()
+            ... except NameError:
+            ...     logger.error("Function is not defined", exc_info=True)
         """
         logger_ = logging.getLogger(__name__)
         logger_.setLevel("DEBUG")
@@ -1807,9 +1808,9 @@ class HTTPRequester(py_object):
         >>>
         >>> requests = HTTPRequester(opener, timeout=20)
         >>> response = requests.get(
-        >>>     "https://172.20.0.101:8080/login",
-        >>>     params={"username": "Admin", "password": "12345"}
-        >>> )
+        ...     "https://172.20.0.101:8080/login",
+        ...     params={"username": "Admin", "password": "12345"}
+        ... )
         >>>
         >>> response.code
         200
@@ -1889,9 +1890,9 @@ class HTTPRequester(py_object):
         Examples:
             >>> requests = HTTPRequester()
             >>> response = requests.get(
-            >>>     "http://httpbin.org/get",
-            >>>     params={"PARAMETER": "TEST"},
-            >>> )
+            ...     "http://httpbin.org/get",
+            ...     params={"PARAMETER": "TEST"},
+            ... )
             >>> response.code
             200
             >>> response.text
@@ -1922,10 +1923,10 @@ class HTTPRequester(py_object):
         Examples:
             >>> requests = HTTPRequester()
             >>> response = requests.post(
-            >>>     "http://httpbin.org/post",
-            >>>     data={"PARAMETER": "TEST"},
-            >>>     headers={"Content-Type": "application/json"},
-            >>> )
+            ...     "http://httpbin.org/post",
+            ...     data={"PARAMETER": "TEST"},
+            ...     headers={"Content-Type": "application/json"},
+            ... )
             >>> response.code
             200
             >>> response.text
@@ -2310,14 +2311,14 @@ class ShotSaver(py_object):
         Examples:
             >>> # noinspection PyUnresolvedReferences
             >>> def callback(success, shot_path):
-            >>>     # Пример callback функции
-            >>>     # Args:
-            >>>     #     success (bool): True если скриншот успешно сохранен, иначе False
-            >>>     #     shot_path (str): Полный путь до скриншота
-            >>>     if success:
-            >>>         host.message("Скриншот успешно сохранен<br>%s" % shot_path)
-            >>>     else:
-            >>>         host.error("Ошибка сохранения скриншота <br>%s" % shot_path)
+            ...     # Пример callback функции
+            ...     # Args:
+            ...     #     success (bool): True если скриншот успешно сохранен, иначе False
+            ...     #     shot_path (str): Полный путь до скриншота
+            ...     if success:
+            ...         host.message("Скриншот успешно сохранен<br>%s" % shot_path)
+            ...     else:
+            ...         host.error("Ошибка сохранения скриншота <br>%s" % shot_path)
             >>>
             >>> ss = ShotSaver()
             >>> ss.async_shot("e80kgBLh_pV4ggECb", callback=callback)
@@ -2397,15 +2398,15 @@ class VideoExporter(py_object):
 
         >>> # noinspection PyUnresolvedReferences
         >>> def callback(success, file_path, channel_full_guid):
-        >>>     # Пример callback функции
-        >>>     # Args:
-        >>>     #     success (bool): True если видео экспортировано успешно, иначе False
-        >>>     #     file_path (str): Полный путь до видеофайла
-        >>>     #     channel_full_guid (str) : Полный guid канала
-        >>>     if success:
-        >>>         host.message("Экспорт успешно завершен<br>%s" % file_path)
-        >>>     else:
-        >>>         host.error("Ошибка экспорта<br>%s" % file_path)
+        ...     # Пример callback функции
+        ...     # Args:
+        ...     #     success (bool): True если видео экспортировано успешно, иначе False
+        ...     #     file_path (str): Полный путь до видеофайла
+        ...     #     channel_full_guid (str) : Полный guid канала
+        ...     if success:
+        ...         host.message("Экспорт успешно завершен<br>%s" % file_path)
+        ...     else:
+        ...         host.error("Ошибка экспорта<br>%s" % file_path)
 
         >>> ss = VideoExporter()
         >>> dt_start = datetime.now() - timedelta(seconds=120)
@@ -2688,7 +2689,7 @@ class GUITemplate(py_object):
 
     Examples:
         >>> # Создаем шаблон с именем "New template" и получаем его guid
-        >>> template = Template("New template")
+        >>> template = GUITemplate("New template")
         >>> template.guid
         'Y2YFAkeZ'
 
@@ -3210,11 +3211,11 @@ class Channels(ObjectFromSetting):
         >>>
         >>> # Включим ручную запись на выбранных каналах
         >>> for channel in selected_channels:
-        >>>     channel.obj.manual_record_start()
+        ...     channel.obj.manual_record_start()
         >>>
         >>> # Или добавим к имени канала его guid
         >>> for channel in selected_channels:
-        >>>     channel.settings["name"] += " ({})".format(channel.guid)
+        ...     channel.settings["name"] += " ({})".format(channel.guid)
     """
 
     def __init__(self, server_guid=None):
@@ -3328,7 +3329,7 @@ class Devices(ObjectFromSetting):
         >>>
         >>> # Перезагрузим все устройства
         >>> for dev in enabled_devices:
-        >>>     dev.settings["reboot"] = 1
+        ...     dev.settings["reboot"] = 1
     """
 
     def __init__(self, server_guid=None):
@@ -3429,7 +3430,7 @@ class Scripts(ObjectFromSetting):
         >>>
         >>> # Отключим все скрипты
         >>> for script in all_scripts:
-        >>>     script.settings["enable"] = 0
+        ...     script.settings["enable"] = 0
     """
 
     def __init__(self, server_guid=None):
@@ -3526,7 +3527,7 @@ class StockScripts(ObjectFromSetting):
         >>>
         >>> # Отключим все скрипты
         >>> for script in all_scripts:
-        >>>     script.settings["enable"] = 0
+        ...     script.settings["enable"] = 0
     """
 
     def __init__(self, server_guid=None):
@@ -3627,7 +3628,7 @@ class Rules(ObjectFromSetting):
         >>>
         >>> # Отключим все правила
         >>> for rule in all_rules:
-        >>>     rule.settings["enable"] = 0
+        ...     rule.settings["enable"] = 0
     """
 
     def __init__(self, server_guid=None):
@@ -3753,11 +3754,11 @@ class Schedules(ObjectFromSetting):
             >>> schedule = None
             >>> # noinspection PyGlobalUndefined,PyUnresolvedReferences
             >>> def on_schedule_loaded(schedule_obj):
-            >>>     global schedule
-            >>>     schedule = schedule_obj
-            >>>
-            >>>     message("Schedule '{obj.name}' ({obj.guid}) loaded".format(obj=schedule))
-            >>>     schedule.activate_on_state_changes(lambda: alert(schedule.state("color")))
+            ...     global schedule
+            ...     schedule = schedule_obj
+            ...
+            ...     message("Schedule '{obj.name}' ({obj.guid}) loaded".format(obj=schedule))
+            ...     schedule.activate_on_state_changes(lambda: alert(schedule.state("color")))
             >>>
             >>> Schedules().on_load("Unnamed Schedule", on_schedule_loaded)
         """
@@ -4652,7 +4653,7 @@ class ObjectFromList(BasicObject):
             "not a workplace"
 
         try:
-            zones_dir = settings("/%s/channels/%s/deep_people" % (server, channel))
+            zones_dir = self._host_api.settings("/%s/channels/%s/deep_people" % (server, channel))
             for i in xrange(16):
                 if zones_dir["zone%02d_guid" % i] == guid:
                     if zones_dir["zone%02d_type" % i] in ["border", "border_swapped"]:
@@ -5913,18 +5914,18 @@ class FTPSender(Sender):
     Examples:
         >>> # noinspection PyUnresolvedReferences
         >>> def callback(file_path, progress, error):
-        >>>     # Пример callback функции, которая отображает
-        >>>     # текущий прогресс в счетчике запуска скрипта
-        >>>     # Args:
-        >>>     #   file_path (str): Путь до файла
-        >>>     #   progress (int): Текущий прогресс передачи файла, %
-        >>>     #   error (str | Exception): Ошибка при отправке файла, если есть
-        >>>     host.stats()["run_count"] = progress
-        >>>     if error:
-        >>>         host.error(error)
-        >>>
-        >>>     if progress == 100:
-        >>>         host.timeout(3000, lambda: os.remove(BaseUtils.win_encode_path(file_path)))
+        ...     # Пример callback функции, которая отображает
+        ...     # текущий прогресс в счетчике запуска скрипта
+        ...     # Args:
+        ...     #   file_path (str): Путь до файла
+        ...     #   progress (int): Текущий прогресс передачи файла, %
+        ...     #   error (str | Exception): Ошибка при отправке файла, если есть
+        ...     host.stats()["run_count"] = progress
+        ...     if error:
+        ...         host.error(error)
+        ...
+        ...     if progress == 100:
+        ...         host.timeout(3000, lambda: os.remove(BaseUtils.win_encode_path(file_path)))
         >>>
         >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", work_dir="/test_dir/", callback=callback)
         >>> sender.files(r"D:\Shots\export_video.avi")

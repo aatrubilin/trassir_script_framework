@@ -2,6 +2,22 @@
 Changelog
 =========
 
+Version 0.63
+===========
+*Released 2019-07-19*
+
+New Features
+
+- Added :meth:`trassir_script_framework.BaseUtils.dt_to_ts`
+- Added :class:`trassir_script_framework.StockScript`
+- Added :meth:`trassir_script_framework.PokaYoke.fire_recognizer_events`
+
+Changes
+
+- Rename :meth:`trassir_script_framework.BaseUtils.ts_to_datetime` -> :meth:`trassir_script_framework.BaseUtils.dt_to_ts`
+- Update TBotAPI: Fix - Send image method with cyrillic symbols on WinOS; Add - send_image_album
+- Fix docstrings
+
 Version 0.61
 ===========
 *Released 2019-07-12*
@@ -18,7 +34,7 @@ Changes
 - Rebuild :meth:`trassir_script_framework.ShotSaver.pool_shot`
 - Rebuild :meth:`trassir_script_framework.BaseUtils.get_logger`
 
-Version 0.6
+Version 0.60
 ===========
 *Released 2019-07-05*
 
@@ -28,7 +44,7 @@ Changes
 - Update tbot_api
 - Other fixes
 
-Version 0.5
+Version 0.50
 ===========
 *Released 2019-05-16*
 
