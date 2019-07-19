@@ -53,6 +53,11 @@ Scripts
 .. autoclass:: trassir_script_framework.Scripts
     :members:
 
+StockScripts
+------------
+.. autoclass:: trassir_script_framework.StockScripts
+    :members:
+
 Schedules
 ---------
 .. autoclass:: trassir_script_framework.Schedules
