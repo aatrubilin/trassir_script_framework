@@ -7,6 +7,7 @@ Version 0.64
 *Released 2019-07-25*
 
 New Features
+
 - Add global `logger`. You need just set `DEBUG = True`
 - Add :attr:`trassir_script_framework.BaseUtils.context_menu`
 - Add :meth:`trassir_script_framework.BaseUtils.context_menu_button`

@@ -30,3 +30,8 @@ FTPSender
 ---------
 .. autoclass:: trassir_script_framework.FTPSender
     :members:
+
+SoundPlayer
+-----------
+.. autoclass:: trassir_script_framework.SoundPlayer
+    :members:
