@@ -3,7 +3,7 @@
 <parameters>
     <company>AATrubilin</company>
     <title>trassir_script_framework</title>
-    <version>0.63</version>
+    <version>0.64</version>
 </parameters>
 """
 
@@ -718,6 +718,9 @@ import logging
 import threading
 import subprocess
 
+if os.name == "nt":
+    import winsound
+
 from Queue import Queue
 from functools import wraps
 from collections import deque
@@ -1022,7 +1025,7 @@ class BaseUtils:
             :obj:`str`: Декодированый путь до файла или папки
 
         Examples:
-            >>> path = r"D:\Shots\Скриншот.jpeg"
+            >>> path = r"D:/Shots/Скриншот.jpeg"
             >>> os.path.isfile(path)
             False
             >>> os.path.isfile(BaseUtils.win_encode_path(path))
@@ -1031,8 +1034,7 @@ class BaseUtils:
         if os.name == "nt":
             try:
                 path = path.decode("utf8")
-            except UnicodeDecodeError:
-                logger.warning("UnicodeDecodeError: {}".format(path), exc_info=True)
+            except (UnicodeDecodeError, UnicodeEncodeError):
                 pass
 
         return path
@@ -1102,10 +1104,9 @@ class BaseUtils:
         Returns:
             :obj:`bool`: :obj:`True` если шаблон существует, иначе :obj:`False`
         """
-        if template_name in [
-            tmpl_.name for tmpl_ in cls._host_api.settings("templates").ls()
-        ]:
-            return True
+        for tmpl_ in cls._host_api.settings("templates").ls():
+            if tmpl_.name == template_name:
+                return True
         return False
 
     @classmethod
@@ -1225,7 +1226,7 @@ class BaseUtils:
         Returns:
             :obj:`int`: Trassir timestamp
         """
-        return int(time.mktime(dt.timetuple())) * 1e6 + dt.microsecond
+        return int(int(time.mktime(dt.timetuple())) * 1e6 + dt.microsecond)
 
     @classmethod
     def lpr_flags_decode(cls, flags):
@@ -1318,9 +1319,9 @@ class BaseUtils:
             :obj:`str`: Base64 image
 
         Examples:
-            >>> BaseUtils.image_to_base64(r"manual\en\cloud-devices-16.png")
+            >>> BaseUtils.image_to_base64(r"manual/en/cloud-devices-16.png")
             'iVBORw0KGgoAAAANSUhEUgAAB1MAAAH0CAYAAABo5wRhAAAACXBIWXMAAC4jA...'
-            >>> BaseUtils.image_to_base64(open(r"manual\en\cloud-devices-16.png", "rb").read())
+            >>> BaseUtils.image_to_base64(open(r"manual/en/cloud-devices-16.png", "rb").read())
             'iVBORw0KGgoAAAANSUhEUgAAB1MAAAH0CAYAAABo5wRhAAAACXBIWXMAAC4jA...'
         """
         _, ext = os.path.splitext(image)
@@ -1348,7 +1349,7 @@ class BaseUtils:
             :obj:`str`: html image
 
         Examples:
-            >>> base64_image = BaseUtils.image_to_base64(r"manual\en\cloud-devices-16.png")
+            >>> base64_image = BaseUtils.image_to_base64(r"manual/en/cloud-devices-16.png")
             >>> html_image = BaseUtils.base64_to_html_img(base64_image, width=280, height=75)
             >>> html_image
             '<img src="data:image/png;base64,iVBORw0KGgoAA...Jggg==" width="280" height="75">'
@@ -1732,6 +1733,12 @@ class BaseUtils:
             return script_name
 
 
+if globals().get("DEBUG", False):
+    logger = BaseUtils.get_logger(host_log="DEBUG", popup_log="WARNING", file_log="DEBUG")
+else:
+    logger = BaseUtils.get_logger()
+
+
 class Worker(threading.Thread):
     """Thread executing tasks from a given tasks queue"""
 
@@ -2003,6 +2010,8 @@ class ScriptObject(host.TrassirObject, py_object):
 
         host_api.object_add(self)
 
+        self.context_menu = []
+
     @property
     def health(self):
         """:obj:`"OK"` | :obj:`"Error"`: Состояние объекта"""
@@ -2019,7 +2028,7 @@ class ScriptObject(host.TrassirObject, py_object):
     @property
     def check_me(self):
         """:obj:`bool`: Флаг ``check_me`` объекта"""
-        return self._check_me
+        return bool(1 - self._check_me)
 
     @check_me.setter
     def check_me(self, value):
@@ -2061,6 +2070,47 @@ class ScriptObject(host.TrassirObject, py_object):
             self._folder = value
         else:
             raise ValueError("Expected str, got {}".format(type(value).__name__))
+
+    def context_menu_button(self, text, callback):
+        """Добавляет кнопку в контекстное меню объекта
+
+        Args:
+            text (:obj:`str`): Текст кнопки
+            callback (:obj:`function`): Функция, которая вызывается при нажатии
+                на кнопку. В качестве единственного аргумента функция приимает
+                текущий объект (:obj:`host.object(self.guid)`).
+
+        Returns:
+            :obj:`SE_ContextCatcher`: Хендлер контекстного меню
+
+        Raises:
+            ValueError: Если пустой текст кнопки.
+            TypeError: Если callback нельзя вызвать в качестве функции.
+
+        Examples:
+            >>> scr = ScriptObject()
+            >>>
+            >>> def switch(obj):
+            ...     check_me = scr.check_me
+            ...     scr.check_me = not check_me
+            ...     btn.set_name("ON" if check_me else "OFF")
+            >>>
+            >>> btn = scr.context_menu_button("ON", switch)
+            >>> btn
+            <host.SE_ContextCatcher object at 0x17B01A98>
+            >>> scr.context_menu
+            [('ON', 'switch', <host.SE_ContextCatcher object at 0x17B01A98>)]
+
+        """
+        if not text:
+            raise ValueError("No text")
+
+        if not callable(callback):
+            raise TypeError("Callback function is not callable")
+
+        btn = self._host_api.activate_on_context_menu(self._guid, text, callback)
+        self.context_menu.append((text, callback.__name__, btn))
+        return btn
 
     def fire_event_v2(self, message, channel="", data=""):
         """Создает событие в Trassir
@@ -4653,7 +4703,9 @@ class ObjectFromList(BasicObject):
             "not a workplace"
 
         try:
-            zones_dir = self._host_api.settings("/%s/channels/%s/deep_people" % (server, channel))
+            zones_dir = self._host_api.settings(
+                "/%s/channels/%s/deep_people" % (server, channel)
+            )
             for i in xrange(16):
                 if zones_dir["zone%02d_guid" % i] == guid:
                     if zones_dir["zone%02d_type" % i] in ["border", "border_swapped"]:
@@ -5246,6 +5298,91 @@ class PokaYoke(py_object):
             )
 
 
+class SoundPlayer(py_object):
+    """"""
+
+    _DEFAULT_SOUNDS = {
+        "SNES-startup.wav",
+        "alarm.wav",
+        "bell.wav",
+        "boxing-bell-1.wav",
+        "boxing-bell-3.wav",
+        "cardlock-open.wav",
+        "chime.wav",
+        "chip001.wav",
+        "chip019.wav",
+        "chip069.wav",
+        "cordless-phone-ring.wav",
+        "countdown.wav",
+        "dialtone.wav",
+        "ding.wav",
+        "horn-beep.wav",
+        "phone-beep.wav",
+        "police2.wav",
+        "ship-on-fog.wav",
+        "ships-bell.wav",
+        "spin-up.wav",
+        "tada1.wav",
+        "tape-slow9.wav",
+    }
+
+    def __init__(self, sound_file, host_api=host):
+        """Класс для проигрывания выбранной мелодии.
+
+        Можно указать один из стандартных зуков или добавить свой в папку скриншотов.
+
+        Args:
+            sound_file (:obj:`str`): Имя файла с расширением
+        """
+        self._host_api = host_api
+        self._play = self._get_player(sound_file)
+
+    def _check_file(self, sound_file):
+        _, ext = os.path.splitext(sound_file)
+
+        if ext.lower() != ".wav":
+            raise RuntimeError("Expected *.wav file, got {!r}".format(ext))
+
+        if sound_file not in self._DEFAULT_SOUNDS:
+            base_path = self._host_api.settings("system_wide_options")[
+                "screenshots_folder"
+            ]
+        else:
+            if os.name == "nt":
+                base_path = "sounds"
+            else:
+                base_path = "/opt/trassir/tech1/sounds"
+
+        sound_file = os.path.join(base_path, sound_file)
+
+        if not os.path.isfile(sound_file):
+            raise IOError("File {} not found".format(sound_file))
+
+        return sound_file
+
+    def _get_player(self, sound_file):
+        sound_file = self._check_file(sound_file)
+
+        if os.name == "nt":
+
+            def player():
+                winsound.PlaySound(
+                    sound_file,
+                    winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NOWAIT,
+                )
+
+        else:
+
+            def player():
+                os.system('aplay -D "sysdefault:CARD=PCH" %s &' % sound_file)
+
+        return player
+
+    def play(self):
+        """Проигрывает выбранный файл"""
+        self._play()
+
+
 class SenderError(Exception):
     """Base Sender Exception"""
 
@@ -5279,7 +5416,7 @@ class Sender(py_object):
         """
         return BaseUtils.base64_to_html_img(image_base64, **kwargs)
 
-    def text(self, text):
+    def text(self, text, **kwargs):
         """Send text
 
         Args:
@@ -5287,20 +5424,20 @@ class Sender(py_object):
         """
         pass
 
-    def image(self, image_path, text=""):
+    def image(self, image_path, text="", **kwargs):
         """Send image and optional text
 
         Args:
-            image_path (str): Image path
+            image_path (str | List[str]): Image path or paths
             text (str, optional): Text message; default: ""
         """
         pass
 
-    def files(self, file_paths, text=""):
+    def files(self, file_paths, text="", **kwargs):
         """Send file or list of files
 
         Args:
-            file_paths (str|list): File path or list of paths
+            file_paths (str | List[str]): File path or list of paths
             text (str, optional): Text message; default: ""
         """
         pass
@@ -5319,7 +5456,7 @@ class PopupSender(Sender):
 
             .. image:: images/popup_sender.text.png
 
-        >>> sender.image(r"manual\en\cloud-devices-16.png")
+        >>> sender.image(r"manual/en/cloud-devices-16.png")
 
             .. image:: images/popup_sender.image.png
     """
@@ -5328,7 +5465,7 @@ class PopupSender(Sender):
         super(PopupSender, self).__init__()
         self._attr = {"width": width}
 
-    def text(self, text, popup_type="message"):
+    def text(self, text, popup_type="message", **kwargs):
         """Показывает текст во всплывающем окне
 
         Вызывает один из методов Trassir :obj:`host.alert`,
@@ -5347,28 +5484,33 @@ class PopupSender(Sender):
         else:
             self._host_api.message(text)
 
-    def image(self, image_path, text="", popup_type=None):
+    def image(self, image_path, text="", popup_type=None, **kwargs):
         """Показывает изображение во всплывающем окне
 
         Args:
-            image_path (:obj:`str`): Полный путь до изображения
+            image_path (:obj:`str` | :obj:`List[str]`): Полный путь до изображения
+                или список путей.
             text (:obj:`str`, optional): Текст сообщения. По умолчанию :obj:`""`
             popup_type (:obj:`"message"` | :obj:`"alert"` | :obj:`"error"`, optional)
                 Тип сообщения. По умолчанию :obj:`"message"`
         """
-        image_base64 = self._get_base64(image_path)
+        if not isinstance(image_path, list):
+            image_path = [image_path]
 
-        if not image_base64:
-            self.text("<b>File not found</b><br>{}".format(image_path), popup_type)
-            return
+        images_base64 = [self._get_base64(img_path) for img_path in image_path]
 
-        html_image = BaseUtils.base64_to_html_img(image_base64, **self._attr)
+        for image_base64, img_path in zip(images_base64, image_path):
+            if not image_base64:
+                self.text("<b>File not found</b><br>{}".format(img_path), popup_type)
+                return
 
-        html = "{image}"
-        if text:
-            html = "<b>{text}</b><br>{image}"
+            html_image = BaseUtils.base64_to_html_img(image_base64, **self._attr)
 
-        self.text(html.format(text=text, image=html_image), popup_type)
+            html = "{image}"
+            if text:
+                html = "<b>{text}</b><br>{image}"
+
+            self.text(html.format(text=text, image=html_image), popup_type)
 
 
 class PopupWithBtnSender(Sender):
@@ -5388,7 +5530,7 @@ class PopupWithBtnSender(Sender):
 
             .. image:: images/popup_with_btn_sender.text.png
 
-        >>> sender.image(r"manual\en\cloud-devices-16.png")
+        >>> sender.image(r"manual/en/cloud-devices-16.png")
 
             .. image:: images/popup_with_btn_sender.image.png
     """
@@ -5397,7 +5539,7 @@ class PopupWithBtnSender(Sender):
         super(PopupWithBtnSender, self).__init__()
         self._attr = {"width": width}
 
-    def text(self, text):
+    def text(self, text, **kwargs):
         """Показывает текст во всплывающем окне
 
         Вызывает метод Trassir :obj:`host.question` с текстом
@@ -5409,26 +5551,31 @@ class PopupWithBtnSender(Sender):
             "<pre>{}</pre>".format(text), "Ok", BaseUtils.do_nothing
         )
 
-    def image(self, image_path, text=""):
+    def image(self, image_path, text="", **kwargs):
         """Показывает изображение во всплывающем окне
 
         Args:
-            image_path (:obj:`str`): Полный путь до изображения
+            image_path (:obj:`str` | :obj:`List[str]`): Полный путь до изображения
+                или список путей.
             text (:obj:`str`, optional): Текст сообщения. По умолчанию :obj:`""`
         """
-        image_base64 = self._get_base64(image_path)
+        if not isinstance(image_path, list):
+            image_path = [image_path]
 
-        if not image_base64:
-            self.text("<b>File not found</b><br>{}".format(image_path))
-            return
+        images_base64 = [self._get_base64(img_path) for img_path in image_path]
 
-        html_image = BaseUtils.base64_to_html_img(image_base64, **self._attr)
+        for image_base64, img_path in zip(images_base64, image_path):
+            if not image_base64:
+                self.text("<b>File not found</b><br>{}".format(image_path))
+                return
 
-        html = "{image}"
-        if text:
-            html = "<b>{text}</b><br>{image}"
+            html_image = BaseUtils.base64_to_html_img(image_base64, **self._attr)
 
-        self.text(html.format(text=text, image=html_image))
+            html = "{image}"
+            if text:
+                html = "<b>{text}</b><br>{image}"
+
+            self.text(html.format(text=text, image=html_image))
 
 
 class EmailSender(Sender):
@@ -5460,11 +5607,11 @@ class EmailSender(Sender):
 
             .. image:: images/email_sender.text.png
 
-        >>> sender.image(r"manual\en\cloud-devices-16.png")
+        >>> sender.image(r"manual/en/cloud-devices-16.png")
 
             .. image:: images/email_sender.image.png
 
-        >>> sender.files([r"manual\en\cloud.html", r"manual\en\cloud.png"])
+        >>> sender.files([r"manual/en/cloud.html", r"manual/en/cloud.png"])
 
             .. image:: images/email_sender.files.png
     """
@@ -5519,7 +5666,7 @@ class EmailSender(Sender):
 
         return [group] + self._group_files_by_max_size(file_paths[idx:], max_size)
 
-    def text(self, text, subject=None, attachments=None):
+    def text(self, text, subject=None, attachments=None, **kwargs):
         """Отправка текстового сообщения
 
         Args:
@@ -5539,19 +5686,22 @@ class EmailSender(Sender):
             attachments,
         )
 
-    def image(self, image_path, text="", subject=None):
+    def image(self, image_path, text="", subject=None, **kwargs):
         """Отправка изображения
 
         Args:
-            image_path (:obj:`str`): Полный путь до изображения
+            image_path (:obj:`str` | :obj:`List[str]`): Полный путь до изображения
+                или список путей.
             text (:obj:`str`, optional): Текст сообщения.
                 По умолчанию :obj:`""`
             subject (:obj:`str`, optional): Новая тема сообщения.
                 По умолчанию :obj:`None`
         """
-        self.files([image_path], text=text, subject=subject)
+        if not isinstance(image_path, list):
+            image_path = [image_path]
+        self.files(image_path, text=text, subject=subject)
 
-    def files(self, file_paths, text="", subject=None, callback=None):
+    def files(self, file_paths, text="", subject=None, callback=None, **kwargs):
         """Отправка файлов
 
         Note:
@@ -5612,11 +5762,11 @@ class TelegramSender(Sender):
 
             .. image:: images/telegram_sender.text.png
 
-        >>> sender.image(r"manual\en\cloud-devices-16.png")
+        >>> sender.image(r"manual/en/cloud-devices-16.png")
 
             .. image:: images/telegram_sender.image.png
 
-        >>> sender.files([r"manual\en\cloud.html", r"manual\en\cloud.png"])
+        >>> sender.files([r"manual/en/cloud.html", r"manual/en/cloud.png"])
 
             .. image:: images/telegram_sender.files.png
 
@@ -5626,11 +5776,11 @@ class TelegramSender(Sender):
 
             .. image:: images/telegram_sender.text.png
 
-        >>> sender.image(r"manual\en\cloud-devices-16.png", tg_users=[123456789])
+        >>> sender.image(r"manual/en/cloud-devices-16.png", tg_users=[123456789])
 
             .. image:: images/telegram_sender.image.png
 
-        >>> sender.files([r"manual\en\cloud.html", r"manual\en\cloud.png"], tg_users=[123456789])
+        >>> sender.files([r"manual/en/cloud.html", r"manual/en/cloud.png"], tg_users=[123456789])
 
             .. image:: images/telegram_sender.files.png
     """
@@ -5644,7 +5794,7 @@ class TelegramSender(Sender):
         else:
             self.telegram_ids = None
 
-    def text(self, text, tg_users=None):
+    def text(self, text, tg_users=None, **kwargs):
         """Отправка текстового сообщения
 
         Args:
@@ -5657,7 +5807,7 @@ class TelegramSender(Sender):
 
         self._tbot_api.send_message(tg_users, text)
 
-    def image(self, image_path, text="", tg_users=None, remove=False):
+    def image(self, image_path, text="", tg_users=None, remove=False, **kwargs):
         """Отправка изображения
 
         Args:
@@ -5688,7 +5838,7 @@ class TelegramSender(Sender):
 
             self._tbot_api.send_image(tg_users, image_path, caption=text, remove=remove)
 
-    def files(self, file_paths, text="", tg_users=None, remove=False):
+    def files(self, file_paths, text="", tg_users=None, remove=False, **kwargs):
         """Отправка файлов
 
         Args:
@@ -5839,7 +5989,7 @@ class SMSCSender(Sender):
         url = self._get_link(cost=1, mes=urllib.quote("Hello world!"))
         self._host_api.async_get(url, self._request_callback)
 
-    def text(self, text):
+    def text(self, text, **kwargs):
         """Отправка текстового сообщения
 
         Args:
@@ -5928,7 +6078,7 @@ class FTPSender(Sender):
         ...         host.timeout(3000, lambda: os.remove(BaseUtils.win_encode_path(file_path)))
         >>>
         >>> sender = FTPSender("172.20.0.10", 21, "trassir", "12345", work_dir="/test_dir/", callback=callback)
-        >>> sender.files(r"D:\Shots\export_video.avi")
+        >>> sender.files(r"D:/Shots/export_video.avi")
     """
 
     # noinspection SpellCheckingInspection,PyShadowingNames
@@ -6072,7 +6222,7 @@ class FTPSender(Sender):
             self._work_now = False
             self._close_connection()
 
-    def files(self, file_paths, *args):
+    def files(self, file_paths, *args, **kwargs):
         """Отправка файлов
 
         Note:

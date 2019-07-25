@@ -2,6 +2,22 @@
 Changelog
 =========
 
+Version 0.64
+===========
+*Released 2019-07-25*
+
+New Features
+- Add global `logger`. You need just set `DEBUG = True`
+- Add :attr:`trassir_script_framework.BaseUtils.context_menu`
+- Add :meth:`trassir_script_framework.BaseUtils.context_menu_button`
+- Add :class:`trassir_script_framework.SoundPlayer`
+
+Changes
+
+- Refactoring :meth:`trassir_script_framework.BaseUtils.is_template_exists`
+- Fix :meth:`trassir_script_framework.BaseUtils.is_template_exists` returns returns `1e15`
+- Now you can pass list argument to senders.
+
 Version 0.63
 ===========
 *Released 2019-07-19*
