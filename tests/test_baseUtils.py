@@ -19,8 +19,6 @@ from trassir_script_framework import BaseUtils
 
 class TestBaseUtils(TestCase):
     shot_path = os.path.join(cwd, r"files/Скриншот.jpg")
-    dt = datetime.strptime("2019-07-22T08:45:48.954000", "%Y-%m-%dT%H:%M:%S.%f")
-    ts = 1563759948954000
 
     lpr_flags = {
         1: ["LPR_UP"],
@@ -86,7 +84,7 @@ class TestBaseUtils(TestCase):
         self.assertEqual(False, os.path.isfile("fake_file.jpeg"))
 
     def test_is_folder_exists(self):
-        self.assertRaises(IOError, BaseUtils.is_folder_exists, cwd)
+        self.assertRaises(IOError, BaseUtils.is_folder_exists, "fake folder")
         BaseUtils.is_folder_exists(BaseUtils.win_encode_path(cwd))
 
     def test_is_template_exists(self):
@@ -100,11 +98,11 @@ class TestBaseUtils(TestCase):
         dt_now = datetime.now()
         self.assertEqual('"%s"' % dt_now.isoformat(), BaseUtils.to_json(dt_now))
 
-    def test_ts_to_dt(self):
-        self.assertEqual(self.dt, BaseUtils.ts_to_dt(self.ts))
-
-    def test_dt_to_ts(self):
-        self.assertEqual(self.ts, BaseUtils.dt_to_ts(self.dt))
+    def test_ts_to_dt_and_dt_to_ts(self):
+        dt_now = datetime.now()
+        ts = BaseUtils.dt_to_ts(dt_now)
+        dt = BaseUtils.ts_to_dt(ts)
+        self.assertEqual(dt_now, dt)
 
     def test_lpr_flags_decode(self):
         for flags_int, flags_decoded in self.lpr_flags.iteritems():
