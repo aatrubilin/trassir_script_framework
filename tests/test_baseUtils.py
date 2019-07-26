@@ -129,11 +129,11 @@ class TestBaseUtils(TestCase):
 
     def test_save_pkl(self):
         data = {"key": "value"}
-        BaseUtils.save_pkl("data.pkl", data)
-        self.assertEqual(True, BaseUtils.is_file_exists("data.pkl"))
+        BaseUtils.save_pkl("tests/data.pkl", data)
+        self.assertEqual(True, BaseUtils.is_file_exists("tests/data.pkl"))
 
     def test_load_pkl(self):
-        data = BaseUtils.load_pkl("data.pkl")
+        data = BaseUtils.load_pkl("tests/data.pkl")
         self.assertEqual({"key": "value"}, data)
         self.assertEqual([], BaseUtils.load_pkl("fake_file.pkl", list))
 

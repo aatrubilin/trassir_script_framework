@@ -5322,7 +5322,7 @@ class SoundPlayer(py_object):
         .. raw:: html
 
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/SNES-startup.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/SNES-startup.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5330,7 +5330,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/alarm.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/alarm.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5338,7 +5338,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/bell.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/bell.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5346,7 +5346,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/boxing-bell-1.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/boxing-bell-1.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5354,7 +5354,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/boxing-bell-3.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/boxing-bell-3.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5362,7 +5362,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/cardlock-open.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/cardlock-open.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5370,7 +5370,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/chime.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/chime.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5378,7 +5378,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/chip001.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/chip001.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5386,7 +5386,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/chip019.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/chip019.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5394,7 +5394,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/chip069.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/chip069.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5402,7 +5402,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/cordless-phone-ring.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/cordless-phone-ring.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5410,7 +5410,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/countdown.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/countdown.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5418,7 +5418,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/dialtone.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/dialtone.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5426,7 +5426,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/ding.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/ding.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5434,7 +5434,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/horn-beep.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/horn-beep.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5442,7 +5442,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/phone-beep.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/phone-beep.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5450,7 +5450,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/police2.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/police2.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5458,7 +5458,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/ship-on-fog.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/ship-on-fog.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5466,7 +5466,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/ships-bell.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/ships-bell.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5474,7 +5474,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/spin-up.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/spin-up.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5482,7 +5482,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/tada1.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/tada1.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">
@@ -5490,7 +5490,7 @@ class SoundPlayer(py_object):
             </code>
             <br>
             <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
-              <source src="../../source/sounds/tape-slow9.wav" type="audio/wav">
+              <source src="https://github.com/aatrubilin/trassir_script_framework/raw/master/docs/source/sounds/tape-slow9.wav" type="audio/wav">
               Your browser does not support the <code>audio</code> element.
             </audio>
             <code class="xref py py-obj docutils literal notranslate">

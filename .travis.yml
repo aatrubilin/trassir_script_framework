@@ -6,4 +6,4 @@ python:
 #  - pip install -r requirements.txt
 # command to run tests
 script:
-  - unittest discover -s tests
+  - python -m unittest discover tests
