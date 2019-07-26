@@ -3,7 +3,7 @@ Changelog
 =========
 
 Version 0.64
-===========
+============
 *Released 2019-07-25*
 
 New Features
@@ -20,7 +20,7 @@ Changes
 - Now you can pass list argument to senders.
 
 Version 0.63
-===========
+============
 *Released 2019-07-19*
 
 New Features
@@ -36,7 +36,7 @@ Changes
 - Fix docstrings
 
 Version 0.61
-===========
+============
 *Released 2019-07-12*
 
 New Features
@@ -52,7 +52,7 @@ Changes
 - Rebuild :meth:`trassir_script_framework.BaseUtils.get_logger`
 
 Version 0.60
-===========
+============
 *Released 2019-07-05*
 
 Changes
@@ -62,7 +62,7 @@ Changes
 - Other fixes
 
 Version 0.50
-===========
+============
 *Released 2019-05-16*
 
 New Features

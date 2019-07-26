@@ -15,6 +15,8 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath(r'../..'))
+sys.path.insert(0, os.path.abspath(r'../../tests'))
+import host
 
 
 # -- Project information -----------------------------------------------------
@@ -202,21 +204,21 @@ intersphinx_mapping = {
 }
 
 
-class TrassirHost:
-    def __init__(self):
-        pass
+# class TrassirHost:
+#     def __init__(self):
+#         pass
 
-    @staticmethod
-    def objects_list(obj_type):
-        return [("name", "guid", obj_type, "parent")]
+#     @staticmethod
+#     def objects_list(obj_type):
+#         return [("name", "guid", obj_type, "parent")]
 
-    @staticmethod
-    def exec_encoded(code):
-        pass
+#     @staticmethod
+#     def exec_encoded(code):
+#         pass
 
-    class TrassirObject:
-        def __init__(self):
-            pass
+#     class TrassirObject:
+#         def __init__(self):
+#             pass
 
 
-sys.modules["host"] = TrassirHost
+# sys.modules["host"] = TrassirHost

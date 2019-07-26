@@ -1,0 +1,6 @@
+(dp0
+S'key'
+p1
+S'value'
+p2
+s.

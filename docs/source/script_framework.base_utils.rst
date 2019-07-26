@@ -29,9 +29,13 @@ to_json
 -------
 .. automethod:: trassir_script_framework.BaseUtils.to_json
 
-ts_to_datetime
---------------
-.. automethod:: trassir_script_framework.BaseUtils.ts_to_datetime
+ts_to_dt
+--------
+.. automethod:: trassir_script_framework.BaseUtils.ts_to_dt
+
+dt_to_ts
+--------
+.. automethod:: trassir_script_framework.BaseUtils.dt_to_ts
 
 lpr_flags_decode
 ----------------

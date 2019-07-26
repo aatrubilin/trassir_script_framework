@@ -1206,6 +1206,10 @@ class BaseUtils:
 
         Returns:
             :obj:`datetime`: Datetime объект
+
+        Examples:
+            >>> BaseUtils.ts_to_dt(1564109694242000)
+            datetime.datetime(2019, 7, 26, 9, 54, 54, 242000)
         """
         if ts > 1e10:
             ts_sec = int(ts / 1e6)
@@ -1225,6 +1229,10 @@ class BaseUtils:
 
         Returns:
             :obj:`int`: Trassir timestamp
+
+        Examples:
+            >>> BaseUtils.ts_to_dt(datetime(2019, 7, 26, 9, 54, 54, 242000))
+            1564109694242000
         """
         return int(int(time.mktime(dt.timetuple())) * 1e6 + dt.microsecond)
 
@@ -5268,6 +5276,10 @@ class PokaYoke(py_object):
             RuntimeError: Если указанный сервер недоступен.
             EnvironmentError: Если моудль распознавания или режим для СКУД не доступны.
             TrassirError: Если текущее состояние не соотвествует необходимомому.
+
+        Examples:
+            >>> PokaYoke.fire_recognizer_events()
+            TrassirError: Пожалуйста, активируйте 'Режим для СКУД' в настройках распознавания лиц
         """
         if server_guid is None:
             server_guid = BaseUtils.get_server_guid()
@@ -5299,7 +5311,196 @@ class PokaYoke(py_object):
 
 
 class SoundPlayer(py_object):
-    """"""
+    """Класс для проигрывания выбранной мелодии.
+
+    Можно указать один из стандартных зуков или
+    указать полный путь до своего файла.
+
+    Note:
+        Список стандартных файлов
+
+        .. raw:: html
+
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/SNES-startup.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"SNES-startup.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/alarm.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"alarm.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/bell.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"bell.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/boxing-bell-1.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"boxing-bell-1.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/boxing-bell-3.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"boxing-bell-3.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/cardlock-open.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"cardlock-open.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/chime.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"chime.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/chip001.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"chip001.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/chip019.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"chip019.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/chip069.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"chip069.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/cordless-phone-ring.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"cordless-phone-ring.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/countdown.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"countdown.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/dialtone.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"dialtone.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/ding.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"ding.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/horn-beep.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"horn-beep.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/phone-beep.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"phone-beep.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/police2.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"police2.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/ship-on-fog.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"ship-on-fog.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/ships-bell.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"ships-bell.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/spin-up.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"spin-up.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/tada1.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"tada1.wav"</span>
+            </code>
+            <br>
+            <audio controls="controls" style="height: 20px; margin-bottom: -5px;">
+              <source src="../../source/sounds/tape-slow9.wav" type="audio/wav">
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+            <code class="xref py py-obj docutils literal notranslate">
+                <span class="pre">"tape-slow9.wav"</span>
+            </code>
+            <br>
+
+    Args:
+        sound_file (:obj:`str`): Имя файла с расширением
+    """
 
     _DEFAULT_SOUNDS = {
         "SNES-startup.wav",
@@ -5327,13 +5528,6 @@ class SoundPlayer(py_object):
     }
 
     def __init__(self, sound_file, host_api=host):
-        """Класс для проигрывания выбранной мелодии.
-
-        Можно указать один из стандартных зуков или добавить свой в папку скриншотов.
-
-        Args:
-            sound_file (:obj:`str`): Имя файла с расширением
-        """
         self._host_api = host_api
         self._play = self._get_player(sound_file)
 
@@ -5343,17 +5537,13 @@ class SoundPlayer(py_object):
         if ext.lower() != ".wav":
             raise RuntimeError("Expected *.wav file, got {!r}".format(ext))
 
-        if sound_file not in self._DEFAULT_SOUNDS:
-            base_path = self._host_api.settings("system_wide_options")[
-                "screenshots_folder"
-            ]
-        else:
+        if sound_file in self._DEFAULT_SOUNDS:
             if os.name == "nt":
                 base_path = "sounds"
             else:
                 base_path = "/opt/trassir/tech1/sounds"
 
-        sound_file = os.path.join(base_path, sound_file)
+            sound_file = os.path.join(base_path, sound_file)
 
         if not os.path.isfile(sound_file):
             raise IOError("File {} not found".format(sound_file))
@@ -5379,7 +5569,12 @@ class SoundPlayer(py_object):
         return player
 
     def play(self):
-        """Проигрывает выбранный файл"""
+        """Проигрывает выбранный файл
+
+        Examples:
+            >>> player = SoundPlayer("alarm.wav")
+            >>> player.play()
+        """
         self._play()
 
 
