@@ -2099,16 +2099,17 @@ class ScriptObject(host.TrassirObject, py_object):
             >>> scr = ScriptObject()
             >>>
             >>> def switch(obj):
-            ...     check_me = scr.check_me
-            ...     scr.check_me = not check_me
-            ...     btn.set_name("ON" if check_me else "OFF")
+            ...     scr.check_me = not scr.check_me
+            ...     btn.set_name("OFF" if scr.check_me else "ON")
             >>>
             >>> btn = scr.context_menu_button("ON", switch)
+
+                .. image:: images/context_menu_button.png
+
             >>> btn
             <host.SE_ContextCatcher object at 0x17B01A98>
             >>> scr.context_menu
             [('ON', 'switch', <host.SE_ContextCatcher object at 0x17B01A98>)]
-
         """
         if not text:
             raise ValueError("No text")
@@ -2127,6 +2128,12 @@ class ScriptObject(host.TrassirObject, py_object):
             message (:obj:`str`): Сообщение события (``p1``)
             channel (:obj:`str`, optional): Ассоциированный с событием канал (``p2``)
             data (:obj:`str`, optional): Дополнительные данные (``p3``)
+
+        Examples:
+            >>> scr = ScriptObject()
+            >>> scr.fire_event_v2("Hello world")
+
+                .. image:: images/fire_event_v2.png
         """
         if not isinstance(data, str):
             data = BaseUtils.to_json(data, indent=None)
@@ -5170,9 +5177,7 @@ class PokaYoke(py_object):
 
     @classmethod
     def parse_emails(cls, mailing_list, regex=None):
-        """Парсит email дреса из строки
-
-        Каждый email проверяется с помощью regex ``r"[^@]+@[^@]+\.[^@]+"``.
+        """Парсит email дреса из строки и проверяет с помощью regex.
 
         Args:
             mailing_list (:obj:`str`): Список email адресов, разделенный запятыми
@@ -5218,9 +5223,7 @@ class PokaYoke(py_object):
 
     @classmethod
     def check_phones(cls, phones, regex=None):
-        """Проверяет строку на валидность телефонных номеров
-
-        Строка проверяется с помощью regex ``r"[^\d,;]"``.
+        """Проверяет строку на валидность телефонных номеров с помощью regex.
 
         Args:
             phones (:obj:`str`): Список телефонов, разделенный запятыми или точкой с запятой

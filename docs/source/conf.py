@@ -26,9 +26,9 @@ copyright = u'2019, AATrubilin'
 author = u'AATrubilin'
 
 # The short X.Y version
-version = u'0.3'
+version = u'latest'
 # The full version, including alpha/beta/rc tags
-release = u'0.3a'
+release = u'stable'
 
 
 # -- General configuration ---------------------------------------------------
