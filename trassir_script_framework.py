@@ -735,11 +735,9 @@ logger = logging.getLogger()
 class ScriptError(Exception):
     """Base script exception"""
 
-    _host_api = host
-
     def __init__(self, *args):
         super(ScriptError, self).__init__(*args)
-        self._host_api.timeout(1, self.rise_from_thread)
+        host.timeout(1, self.rise_from_thread)
 
     def rise_from_thread(self):
         raise self
@@ -748,30 +746,28 @@ class ScriptError(Exception):
 class HostLogHandler(logging.Handler):
     """Trassir main log handler"""
 
-    def __init__(self, host_api=host):
+    def __init__(self):
         super(HostLogHandler, self).__init__()
-        self._host_api = host_api
 
     def emit(self, record):
         msg = self.format(record)
-        self._host_api.log_message(msg)
+        host.log_message(msg)
 
 
 class PopupHandler(logging.Handler):
     """Trassir popup handler"""
 
-    def __init__(self, host_api=host):
+    def __init__(self):
         super(PopupHandler, self).__init__()
-        self._host_api = host_api
         self._popups = {
-            "CRITICAL": host_api.error,
-            "FATAL": host_api.error,
-            "ERROR": host_api.error,
-            "WARN": host_api.alert,
-            "WARNING": host_api.alert,
-            "INFO": host_api.message,
-            "DEBUG": host_api.message,
-            "NOTSET": host_api.message,
+            "CRITICAL": host.error,
+            "FATAL": host.error,
+            "ERROR": host.error,
+            "WARN": host.alert,
+            "WARNING": host.alert,
+            "INFO": host.message,
+            "DEBUG": host.message,
+            "NOTSET": host.message,
         }
 
     def emit(self, record):
@@ -813,7 +809,6 @@ class DuplicateFilter(logging.Filter):
 class BaseUtils:
     """Base utils for your scripts"""
 
-    _host_api = host
     _FOLDERS = {obj[1]: obj[3] for obj in host.objects_list("Folder")}
     _TEXT_FILE_EXTENSIONS = [".txt", ".csv", ".log"]
     _LPR_FLAG_BITS = {
@@ -943,7 +938,7 @@ class BaseUtils:
                     try:
                         return fn(*args_, **kwargs_)
                     except Exception as err:
-                        cls._host_api.timeout(1, lambda: raise_exc(err))
+                        host.timeout(1, lambda: raise_exc(err))
                     finally:
                         lock.release()
 
@@ -951,7 +946,7 @@ class BaseUtils:
                     try:
                         return fn(*args_, **kwargs_)
                     except Exception as err:
-                        cls._host_api.timeout(1, lambda: raise_exc(err))
+                        host.timeout(1, lambda: raise_exc(err))
 
                 t = threading.Thread(
                     target=locked_fn if locked else unlocked_fn,
@@ -1104,7 +1099,7 @@ class BaseUtils:
         Returns:
             :obj:`bool`: :obj:`True` если шаблон существует, иначе :obj:`False`
         """
-        for tmpl_ in cls._host_api.settings("templates").ls():
+        for tmpl_ in host.settings("templates").ls():
             if tmpl_.name == template_name:
                 return True
         return False
@@ -1165,10 +1160,10 @@ class BaseUtils:
         if isinstance(data, (datetime, date)):
             return data.isoformat()
 
-        elif isinstance(data, cls._host_api.ScriptHost.SE_Settings):
+        elif isinstance(data, host.ScriptHost.SE_Settings):
             return "settings('{}')".format(data.path)
 
-        elif isinstance(data, cls._host_api.ScriptHost.SE_Object):
+        elif isinstance(data, host.ScriptHost.SE_Object):
             return "object('{}')".format(data.guid)
 
         return type(data).__name__
@@ -1459,7 +1454,7 @@ class BaseUtils:
             raise TypeError(
                 "Expected str or unicode, got '{}'".format(type(obj_id).__name__)
             )
-        obj = cls._host_api.object(obj_id)
+        obj = host.object(obj_id)
         try:
             obj.name
         except EnvironmentError:
@@ -1510,7 +1505,7 @@ class BaseUtils:
 
         tr_obj = cls.get_object(obj_id)
         if tr_obj is not None:
-            for obj in cls._host_api.objects_list(""):
+            for obj in host.objects_list(""):
                 if tr_obj.guid == obj[1]:
                     return "{}_{}".format(obj[1], cls._FOLDERS.get(obj[3], obj[3]))
 
@@ -1530,7 +1525,7 @@ class BaseUtils:
             >>> operator_gui = BaseUtils.get_operator_gui()
             >>> operator_gui.raise_monitor(1)
         """
-        obj = cls.get_object("operatorgui_{}".format(cls._host_api.settings("").guid))
+        obj = cls.get_object("operatorgui_{}".format(host.settings("").guid))
         if obj is None:
             raise ScriptError("Failed to load operator gui")
         return obj
@@ -1546,7 +1541,7 @@ class BaseUtils:
             >>> BaseUtils.get_server_guid()
             'client'
         """
-        return cls._host_api.settings("").guid
+        return host.settings("").guid
 
     @classmethod
     def get_script_name(cls):
@@ -1559,7 +1554,7 @@ class BaseUtils:
             >>> BaseUtils.get_script_name()
             'Новый скрипт'
         """
-        return cls._host_api.stats().parent()["name"] or __name__
+        return host.stats().parent()["name"] or __name__
 
     @classmethod
     def get_screenshot_folder(cls):
@@ -1576,7 +1571,7 @@ class BaseUtils:
             >>> BaseUtils.get_screenshot_folder()
             '/home/trassir/shots'
         """
-        folder = cls._host_api.settings("system_wide_options")["screenshots_folder"]
+        folder = host.settings("system_wide_options")["screenshots_folder"]
         cls.is_folder_exists(folder)
         return folder
 
@@ -1644,7 +1639,7 @@ class BaseUtils:
                 handler.close()
                 logger_.removeHandler(handler)
 
-        cls._host_api.register_finalizer(_remove_handlers)
+        host.register_finalizer(_remove_handlers)
 
         if host_log:
             host_handler = HostLogHandler()
@@ -1713,7 +1708,7 @@ class BaseUtils:
             >>> BaseUtils.set_script_name(fmt="{title}")
             'trassir_script_framework'
         """
-        if cls._host_api.stats().parent()["name"] in cls._SCR_DEFAULT_NAMES:
+        if host.stats().parent()["name"] in cls._SCR_DEFAULT_NAMES:
             if script_name is None:
                 try:
                     root = ElementTree.fromstring(__doc__)
@@ -1736,7 +1731,7 @@ class BaseUtils:
                     version="0.1" if version is None else version.text,
                 )
 
-            cls._host_api.stats().parent()["name"] = script_name
+            host.stats().parent()["name"] = script_name
 
             return script_name
 
@@ -1777,8 +1772,7 @@ class Worker(threading.Thread):
 class ThreadPool:
     """Pool of threads consuming tasks from a queue"""
 
-    def __init__(self, num_threads, host_api=host):
-        self._host_api = host_api
+    def __init__(self, num_threads):
         self.tasks = Queue()
         self.workers = [Worker(self.tasks) for _ in xrange(num_threads)]
 
@@ -1994,11 +1988,10 @@ class ScriptObject(host.TrassirObject, py_object):
         >>> scr_obj.fire_event_v2("New event")
     """
 
-    def __init__(self, name=None, guid=None, parent=None, host_api=host):
+    def __init__(self, name=None, guid=None, parent=None):
         super(ScriptObject, self).__init__("Script")
 
-        self._host_api = host_api
-        scr_parent = host_api.stats().parent()
+        scr_parent = host.stats().parent()
 
         self._name = name or BaseUtils.get_script_name()
         self.set_name(self._name)
@@ -2016,7 +2009,7 @@ class ScriptObject(host.TrassirObject, py_object):
 
         self.set_initial_state([self._health, self._check_me])
 
-        host_api.object_add(self)
+        host.object_add(self)
 
         self.context_menu = []
 
@@ -2117,7 +2110,7 @@ class ScriptObject(host.TrassirObject, py_object):
         if not callable(callback):
             raise TypeError("Callback function is not callable")
 
-        btn = self._host_api.activate_on_context_menu(self._guid, text, callback)
+        btn = host.activate_on_context_menu(self._guid, text, callback)
         self.context_menu.append((text, callback.__name__, btn))
         return btn
 
@@ -2163,14 +2156,13 @@ class ShotSaver(py_object):
     )  # Template for shot file name
 
     def __init__(
-        self, shot_awaiting_time=5, tries_to_make_shot=2, pool_size=10, host_api=host
+        self, shot_awaiting_time=5, tries_to_make_shot=2, pool_size=10
     ):
         self._shot_awaiting_time = shot_awaiting_time
         self._tries_to_make_shot = tries_to_make_shot
         self._thread_pool = None
         self._pool_size = pool_size
 
-        self._host_api = host_api
         self._screenshots_folder = BaseUtils.get_screenshot_folder()
 
     @property
@@ -2309,7 +2301,7 @@ class ShotSaver(py_object):
         if file_path is None:
             file_path = self.screenshots_folder
 
-        self._host_api.screenshot_v2_figures(
+        host.screenshot_v2_figures(
             channel_full_guid, file_name, file_path, ts
         )
 
@@ -2344,10 +2336,10 @@ class ShotSaver(py_object):
             if BaseUtils.is_file_exists(
                 BaseUtils.win_encode_path(shot_file), self._shot_awaiting_time
             ):
-                self._host_api.timeout(100, lambda: callback(True, shot_file))
+                host.timeout(100, lambda: callback(True, shot_file))
                 break
         else:
-            self._host_api.timeout(100, lambda: callback(False, shot_file))
+            host.timeout(100, lambda: callback(False, shot_file))
 
     @BaseUtils.run_as_thread
     def async_shot(
@@ -2482,12 +2474,11 @@ class VideoExporter(py_object):
         "{name} ({dt_start} - {dt_end}){sub}.avi"
     )  # Template for shot file name
 
-    def __init__(self, host_api=host):
-        self._host_api = host_api
+    def __init__(self):
         self._export_folder = BaseUtils.get_screenshot_folder()
         self._now_exporting = False
         self._queue = deque()
-        self._default_prebuffer = host_api.settings("archive")["prebuffer"] + 2
+        self._default_prebuffer = host.settings("archive")["prebuffer"] + 2
 
     @property
     def export_folder(self):
@@ -2527,7 +2518,7 @@ class VideoExporter(py_object):
         setting_path = "/{}/archive".format(server_guid)
 
         try:
-            prebuffer = self._host_api.settings(setting_path)["prebuffer"] + 2
+            prebuffer = host.settings(setting_path)["prebuffer"] + 2
         except KeyError:
             prebuffer = self._default_prebuffer
 
@@ -2535,10 +2526,11 @@ class VideoExporter(py_object):
 
         return "%.0f" % wait_dt_end
 
-    def clear_complete_tasks(self):
-        for task in self._host_api.archive_export_tasks_get():
+    @staticmethod
+    def clear_complete_tasks():
+        for task in host.archive_export_tasks_get():
             if task["state"] != 1:
-                self._host_api.archive_export_task_cancel(
+                host.archive_export_task_cancel(
                     task["id"],  # task id from archive_export_tasks_get
                     -1,  # -1 - do not wait for result, 0 - wait forever, > 0 - wait timeout_sec seconds
                     BaseUtils.do_nothing,  # callback_success
@@ -2546,7 +2538,7 @@ class VideoExporter(py_object):
                 )
 
     def _check_queue(self):
-        self._host_api.timeout(10, self.clear_complete_tasks)
+        host.timeout(10, self.clear_complete_tasks)
         if self._queue:
             args, kwargs = self._queue.popleft()
             self._export(*args, **kwargs)
@@ -2556,12 +2548,12 @@ class VideoExporter(py_object):
             return
         elif status in [0, 2]:
             """Export failed"""
-            self._host_api.timeout(
+            host.timeout(
                 100, lambda: callback(False, file_path, channel_full_guid)
             )
         else:
             """Export success"""
-            self._host_api.timeout(
+            host.timeout(
                 100, lambda: callback(True, file_path, channel_full_guid)
             )
 
@@ -2647,7 +2639,7 @@ class VideoExporter(py_object):
         def checker(status):
             self._export_checker(status, callback, exporting_path, channel_full_guid)
 
-        self._host_api.archive_export(
+        host.archive_export(
             server_guid,
             channel_guid,
             exporting_path,
@@ -2771,9 +2763,8 @@ class GUITemplate(py_object):
 
     _DEFAULT_TEMPLATE = ""
 
-    def __init__(self, template_name, host_api=host):
+    def __init__(self, template_name):
         self._name = template_name
-        self._host_api = host_api
         self._operator_gui = BaseUtils.get_operator_gui()
         try:
             self._guid, self._template_settings = self._find_template_guid(
@@ -2782,7 +2773,8 @@ class GUITemplate(py_object):
         except KeyError:
             self._guid, self._template_settings = self._init_template(template_name)
 
-    def _find_template_guid(self, name):
+    @staticmethod
+    def _find_template_guid(name):
         """Find template guid by name
 
         Args:
@@ -2791,12 +2783,12 @@ class GUITemplate(py_object):
         Raises:
             KeyError if can't find template
         """
-        templates = self._host_api.settings("templates")
+        templates = host.settings("templates")
         for template_ in templates.ls():
             if name == template_.name:
                 return (
                     template_.guid,
-                    self._host_api.settings("templates/{}".format(template_.guid)),
+                    host.settings("templates/{}".format(template_.guid)),
                 )
         raise KeyError
 
@@ -2806,7 +2798,7 @@ class GUITemplate(py_object):
         Args:
             name (str) : Template name
         """
-        self._host_api.object(self._host_api.settings("").guid + "T").create_template(
+        host.object(host.settings("").guid + "T").create_template(
             name, self._DEFAULT_TEMPLATE
         )
         try:
@@ -2890,10 +2882,9 @@ class TrObject(py_object):
     obj, name, guid, full_guid, type = None, None, None, None, None
     path, parent, server, settings = None, None, None, None
 
-    def __init__(self, obj, host_api=host):
-        self._host_api = host_api
+    def __init__(self, obj):
 
-        if isinstance(obj, host_api.ScriptHost.SE_Settings):
+        if isinstance(obj, host.ScriptHost.SE_Settings):
             self._load_from_settings(obj)
         elif isinstance(obj, tuple):
             if len(obj) == 4:
@@ -2941,7 +2932,8 @@ class TrObject(py_object):
 
         return server
 
-    def _find_server_guid_for_object(self, object_guid):
+    @staticmethod
+    def _find_server_guid_for_object(object_guid):
         """Find server guid for object
 
         Args:
@@ -2953,7 +2945,7 @@ class TrObject(py_object):
         """
         all_objects = {
             obj[1]: {"name": obj[0], "guid": obj[1], "type": obj[2], "parent": obj[3]}
-            for obj in self._host_api.objects_list("")
+            for obj in host.objects_list("")
         }
 
         def get_parent(child_guid):
@@ -3024,8 +3016,7 @@ class ParameterError(ScriptError):
 class BasicObject(py_object):
     """"""
 
-    def __init__(self, host_api=host):
-        self._host_api = host_api
+    def __init__(self):
         self.this_server_guid = BaseUtils.get_server_guid()
 
     class UniqueNameError(ScriptError):
@@ -3125,7 +3116,8 @@ class ObjectFromSetting(BasicObject):
     def __init__(self):
         super(ObjectFromSetting, self).__init__()
 
-    def _load_objects_from_settings(self, settings_path, obj_type, sub_condition=None):
+    @staticmethod
+    def _load_objects_from_settings(settings_path, obj_type, sub_condition=None):
         """Load objects from Trassir settings
 
         Args:
@@ -3139,7 +3131,7 @@ class ObjectFromSetting(BasicObject):
                 Example [TrObject(...), TrObject(...), ...]
         """
         try:
-            settings = self._host_api.settings(settings_path)
+            settings = host.settings(settings_path)
         except KeyError:
             settings = None
 
@@ -3306,7 +3298,7 @@ class Channels(ObjectFromSetting):
             not_zombie = 1 - sett["archive_zombie_flag"]
             if not_zombie:
                 try:
-                    return self._host_api.settings(sett.cd("info")["grabber_path"])[
+                    return host.settings(sett.cd("info")["grabber_path"])[
                         "grabber_enabled"
                     ]
                 except KeyError:
@@ -3339,7 +3331,7 @@ class Channels(ObjectFromSetting):
                 try:
                     return (
                         1
-                        - self._host_api.settings(sett.cd("info")["grabber_path"])[
+                        - host.settings(sett.cd("info")["grabber_path"])[
                             "grabber_enabled"
                         ]
                     )
@@ -3841,7 +3833,7 @@ class Schedules(ObjectFromSetting):
                 time.sleep(1)
             else:
                 self.server_guid = tmp_server_guid
-                self._host_api.timeout(1, lambda: callback(obj))
+                host.timeout(1, lambda: callback(obj))
                 break
         else:
             self.server_guid = tmp_server_guid
@@ -4487,7 +4479,7 @@ class Persons(ObjectFromSetting):
             if names is None or "persons" in names:
                 for guid in self.server_guid:
                     try:
-                        settings = self._host_api.settings("/{}/persons".format(guid))
+                        settings = host.settings("/{}/persons".format(guid))
                     except KeyError:
                         continue
 
@@ -4500,7 +4492,7 @@ class Persons(ObjectFromSetting):
             if names is None or "persons" in names:
                 for guid in self.server_guid:
                     try:
-                        settings = self._host_api.settings("/{}/persons".format(guid))
+                        settings = host.settings("/{}/persons".format(guid))
                     except KeyError:
                         continue
 
@@ -4537,7 +4529,7 @@ class Persons(ObjectFromSetting):
         self.server_guid = tmp_server_guid[:]
 
         try:
-            persons = self._host_api.service_persons_get(
+            persons = host.service_persons_get(
                 [folder.guid for folder in persons_folders], True, 0, 0, timeout
             )
         except AttributeError:
@@ -4596,7 +4588,8 @@ class ObjectFromList(BasicObject):
     def __init__(self):
         super(ObjectFromList, self).__init__()
 
-    def _load_objects_from_list(self, obj_type, sub_condition=None):
+    @staticmethod
+    def _load_objects_from_list(obj_type, sub_condition=None):
         """Load objects from Trassir objects_list method
 
         Args:
@@ -4611,7 +4604,7 @@ class ObjectFromList(BasicObject):
             sub_condition = BaseUtils.do_nothing
 
         objects = []
-        for obj in self._host_api.objects_list(obj_type):
+        for obj in host.objects_list(obj_type):
             if sub_condition(obj):
                 objects.append(TrObject(obj))
 
@@ -4667,7 +4660,8 @@ class ObjectFromList(BasicObject):
         else:
             return self._filter_objects_by_name(objects, object_names)
 
-    def _zone_type(self, zone_obj):
+    @staticmethod
+    def _zone_type(zone_obj):
         """Возвращает тип зоны для объекта
 
         Args:
@@ -4678,7 +4672,7 @@ class ObjectFromList(BasicObject):
             :obj:`None`: Если тип зоны неизвестен
         """
 
-        if not isinstance(zone_obj, self._host_api.ScriptHost.SE_Object):
+        if not isinstance(zone_obj, host.ScriptHost.SE_Object):
             raise TypeError(
                 "Expected SE_Object, got '{}'".format(type(zone_obj).__name__)
             )
@@ -4690,7 +4684,7 @@ class ObjectFromList(BasicObject):
             return None
 
         try:
-            zones_dir = self._host_api.settings(
+            zones_dir = host.settings(
                 "/{}/channels/{}/people_zones".format(server, channel)
             )
             for i in xrange(16):
@@ -4708,7 +4702,7 @@ class ObjectFromList(BasicObject):
             "not a queue or workplace"
 
         try:
-            zones_dir = self._host_api.settings(
+            zones_dir = host.settings(
                 "/{}/channels/{}/workplace_zones".format(server, channel)
             )
             for i in xrange(16):
@@ -4718,7 +4712,7 @@ class ObjectFromList(BasicObject):
             "not a workplace"
 
         try:
-            zones_dir = self._host_api.settings(
+            zones_dir = host.settings(
                 "/%s/channels/%s/deep_people" % (server, channel)
             )
             for i in xrange(16):
@@ -5088,8 +5082,6 @@ class PokaYoke(py_object):
     )  # Default regex to check emails list
     _PHONE_REGEXP = re.compile(r"[^\d,;]")  # Default regex to check phone list
 
-    _host_api = host
-
     def __init__(self):
         pass
 
@@ -5147,7 +5139,7 @@ class PokaYoke(py_object):
             >>> PokaYoke.ban_daemon()
             TrassirError: Скрипт недоступен для Trassir запущенным как служба
         """
-        if cls._host_api.settings("system_wide_options")["daemon"]:
+        if host.settings("system_wide_options")["daemon"]:
             raise TrassirError("Скрипт недоступен для Trassir запущенным как служба")
 
     @staticmethod
@@ -5288,7 +5280,7 @@ class PokaYoke(py_object):
             server_guid = BaseUtils.get_server_guid()
 
         try:
-            srv_sett = cls._host_api.settings("/%s" % server_guid)
+            srv_sett = host.settings("/%s" % server_guid)
         except KeyError:
             raise RuntimeError("Сервер '%s' не доступен" % server_guid)
 
@@ -5530,8 +5522,7 @@ class SoundPlayer(py_object):
         "tape-slow9.wav",
     }
 
-    def __init__(self, sound_file, host_api=host):
-        self._host_api = host_api
+    def __init__(self, sound_file):
         self._play = self._get_player(sound_file)
 
     def _check_file(self, sound_file):
@@ -5590,8 +5581,8 @@ class SenderError(Exception):
 class Sender(py_object):
     _HTML_IMG_TEMPLATE = """<img src="data:image/png;base64,{img}" {attr}>"""
 
-    def __init__(self, host_api=host):
-        self._host_api = host_api
+    def __init__(self):
+        pass
 
     @staticmethod
     def _get_base64(image_path):
@@ -5676,11 +5667,11 @@ class PopupSender(Sender):
         """
 
         if popup_type == "alert":
-            self._host_api.alert(text)
+            host.alert(text)
         elif popup_type == "error":
-            self._host_api.error(text)
+            host.error(text)
         else:
-            self._host_api.message(text)
+            host.message(text)
 
     def image(self, image_path, text="", popup_type=None, **kwargs):
         """Показывает изображение во всплывающем окне
@@ -5745,7 +5736,7 @@ class PopupWithBtnSender(Sender):
         Args:
             text (:obj:`str`): Текст сообщения
         """
-        self._host_api.question(
+        host.question(
             "<pre>{}</pre>".format(text), "Ok", BaseUtils.do_nothing
         )
 
@@ -5835,11 +5826,12 @@ class EmailSender(Sender):
             )
         )
 
-    def _generate_subject(self):
+    @staticmethod
+    def _generate_subject():
         """Returns `server name` -> `script name`"""
         subject = "{server_name} -> {script_name}".format(
-            server_name=self._host_api.settings("").name or "Client",
-            script_name=self._host_api.stats().parent()["name"],
+            server_name=host.settings("").name or "Client",
+            script_name=host.stats().parent()["name"],
         )
         return subject
 
@@ -5876,7 +5868,7 @@ class EmailSender(Sender):
         """
         if attachments is None:
             attachments = []
-        self._host_api.send_mail_from_account(
+        host.send_mail_from_account(
             self._account,
             self._mailing_list,
             subject or self._subject_default,
@@ -5985,7 +5977,7 @@ class TelegramSender(Sender):
 
     def __init__(self, telegram_ids=None):
         super(TelegramSender, self).__init__()
-        self._host_api.exec_encoded(tbot_service)
+        host.exec_encoded(tbot_service)
         self._tbot_api = TBotAPI()
         if telegram_ids is not None:
             self.telegram_ids = TBotAPI.prepare_users(telegram_ids)
@@ -6185,7 +6177,7 @@ class SMSCSender(Sender):
     def _check_account(self):
         """Send test request to smsc server"""
         url = self._get_link(cost=1, mes=urllib.quote("Hello world!"))
-        self._host_api.async_get(url, self._request_callback)
+        host.async_get(url, self._request_callback)
 
     def text(self, text, **kwargs):
         """Отправка текстового сообщения
@@ -6196,7 +6188,7 @@ class SMSCSender(Sender):
 
         url = self._get_link(mes=text)
 
-        self._host_api.async_get(url, self._request_callback)
+        host.async_get(url, self._request_callback)
 
 
 class FtpUploadTracker:
@@ -6205,8 +6197,7 @@ class FtpUploadTracker:
     size_written = 0.0
     last_shown_percent = 0
 
-    def __init__(self, file_path, callback, host_api=host):
-        self._host_api = host_api
+    def __init__(self, file_path, callback):
         self.total_size = os.path.getsize(BaseUtils.win_encode_path(file_path))
         self.file_path = file_path
         self.callback = callback
@@ -6223,7 +6214,7 @@ class FtpUploadTracker:
 
         if self.last_shown_percent != percent_complete:
             self.last_shown_percent = percent_complete
-            self._host_api.timeout(
+            host.timeout(
                 100, lambda: self.callback(self.file_path, int(percent_complete), "")
             )
 
@@ -6398,24 +6389,24 @@ class FTPSender(Sender):
                         self._send_file(file_path, work_dir)
 
                     except ftplib.all_errors as err:
-                        self._host_api.timeout(
+                        host.timeout(
                             100, lambda: self.callback(file_path, -2, error=err)
                         )
                         self.queue.append(file_path)
                         self._close_connection()
 
                     except Exception as err:
-                        self._host_api.timeout(
+                        host.timeout(
                             100, lambda: self.callback(file_path, -3, error=err)
                         )
 
                 else:
-                    self._host_api.timeout(
+                    host.timeout(
                         100,
                         lambda: self.callback(file_path, -1, error="File not found"),
                     )
 
-            self._host_api.timeout(500, self._sender)
+            host.timeout(500, self._sender)
         else:
             self._work_now = False
             self._close_connection()
