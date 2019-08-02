@@ -2,6 +2,22 @@
 Changelog
 =========
 
+Version 0.65
+============
+*Released 2019-08-02*
+
+New Features
+
+- Add sounds to documentation
+- Add tests
+
+Changes
+
+- Fix travis
+- Fix docstrings
+- Replace host_api to host
+- Fix Can't parse error in tbot_api if used not float version in script parameters
+
 Version 0.64
 ============
 *Released 2019-07-25*

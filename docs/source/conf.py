@@ -202,23 +202,3 @@ autosummary_generate = True
 intersphinx_mapping = {
     'python': ('https://docs.python.org/2.7', None),
 }
-
-
-# class TrassirHost:
-#     def __init__(self):
-#         pass
-
-#     @staticmethod
-#     def objects_list(obj_type):
-#         return [("name", "guid", obj_type, "parent")]
-
-#     @staticmethod
-#     def exec_encoded(code):
-#         pass
-
-#     class TrassirObject:
-#         def __init__(self):
-#             pass
-
-
-# sys.modules["host"] = TrassirHost

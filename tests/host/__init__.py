@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 
-def __str__():
-    return "<trassir host module>"
-
 import os
 from time import sleep
 
