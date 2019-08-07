@@ -736,7 +736,7 @@ import subprocess
 if os.name == "nt":
     import winsound
 
-from Queue import Queue
+from Queue import Queue, Empty
 from functools import wraps
 from collections import deque
 from __builtin__ import object as py_object
@@ -1723,18 +1723,20 @@ class Worker(threading.Thread):
 
     def run(self):
         while __name__ in sys.modules.keys():
-            if not self.tasks.empty():
+            try:
+                func, args, kwargs = self.tasks.get_nowait()
                 self.task_working = True
-                func, args, kwargs = self.tasks.get(timeout=1)
-                # noinspection PyBroadException
-                try:
-                    func(*args, **kwargs)
-                except:  # # pylint: disable=W0702
-                    logger.exception("ThreadPool Worker error")
-                finally:
-                    self.tasks.task_done()
-            else:
+            except Empty:
                 self.task_working = False
+                continue
+
+            # noinspection PyBroadException
+            try:
+                func(*args, **kwargs)
+            except:  # pylint: disable=W0702
+                logger.exception("ThreadPool Worker error")
+            finally:
+                self.tasks.task_done()
 
 
 class ThreadPool:  # pylint: disable=C1001
