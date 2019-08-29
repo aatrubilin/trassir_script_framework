@@ -2,6 +2,15 @@
 Changelog
 =========
 
+Future
+======
+*Released ...*
+
+Changes
+
+- Fix timestamp in shots int -> str
+- Change behavior when access to settings denied
+
 Version 0.65
 ============
 *Released 2019-08-02*

@@ -1595,6 +1595,7 @@ class BaseUtils:  # pylint: disable=R0904,C1001
             for handler_ in logger_.handlers[:]:
                 handler_.close()
                 logger_.removeHandler(handler_)
+
         try:
             host.register_finalizer(_remove_handlers)
             allow_file_handler = True
@@ -1643,7 +1644,9 @@ class BaseUtils:  # pylint: disable=R0904,C1001
                     file_path = cls.win_encode_path(file_path)
 
                     file_handler = RotatingFileHandler(
-                        file_path, maxBytes=file_max_bytes, backupCount=file_backup_count
+                        file_path,
+                        maxBytes=file_max_bytes,
+                        backupCount=file_backup_count,
                     )
                     file_handler.setLevel(file_log)
                     file_formatter = logging.Formatter(
@@ -2257,7 +2260,7 @@ class ShotSaver(py_object):
         else:
             if not isinstance(dt, (datetime, date)):
                 raise TypeError("Expected datetime, got {}".format(type(dt).__name__))
-            ts = BaseUtils.dt_to_ts(dt)
+            ts = str(BaseUtils.dt_to_ts(dt))
 
         if file_name is None:
             file_name = dt.strftime(
@@ -2934,6 +2937,12 @@ class TrObject(py_object):  # pylint: disable=R0902
             obj_name = obj.name
         except KeyError:
             obj_name = obj.guid
+        except ValueError as err:
+            if "access denied" in err.message:
+                obj_name = "Access denied ({})".format(obj.guid)
+                logger.warning(err.message)
+            else:
+                raise err
 
         self.name = self._check_object_name(obj_name)
         self.guid = obj.guid
